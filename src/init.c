@@ -84,7 +84,7 @@ PyMODINIT_FUNC PyInit_cjson(void)
     {
         PyObject *type_decimal = PyObject_GetAttrString(mod_decimal, "Decimal");
         assert(type_decimal != NULL);
-        modulestate(module)->type_decimal = type_decimal;
+        MODULE_STATE(module)->type_decimal = type_decimal;
         Py_DECREF(mod_decimal);
     }
     else
