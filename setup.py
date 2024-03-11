@@ -37,7 +37,7 @@ setup(
     ext_modules=[module1],
     use_scm_version={
         "local_scheme": lambda x: "",
-        "write_to": "python/version.h",
+        "write_to": "src/version.h",
         "write_to_template": version_template,
     },
 )
