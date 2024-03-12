@@ -492,8 +492,9 @@ static cJSON_bool print_object(const PyObject * const item, printbuffer * const 
         }
 
         /* print key */
-        if(PyUnicode_Check(next_element))
+        if(PyUnicode_Check(next_element)){
             if(!print_string(next_element, output_buffer)) return false;
+        }
         else if(next_element == Py_None){
             unsigned char *output = ensure(output_buffer, 5);
             if (output == NULL)
@@ -519,7 +520,6 @@ static cJSON_bool print_object(const PyObject * const item, printbuffer * const 
             }
         }
         else if(PyNumber_Check(next_element)){
-            PyObject_Print(next_element, stdout, 0);
             PyObject* str = PyObject_Str(next_element);
             if(!print_string(str, output_buffer)){
                 Py_DecRef(str);
