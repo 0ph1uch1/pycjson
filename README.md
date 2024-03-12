@@ -1,2 +1,2 @@
-# pycjson
-Python 3 binding for cjson
+# py-cjson
+Python 3 cJSON implementation
