@@ -605,29 +605,9 @@ PyObject *pycJSON_Encode(PyObject *self, PyObject *args, PyObject *kwargs) {
 
     update_offset(buffer);
 
-    /* check if reallocate is available */
-    if (global_hooks.reallocate != NULL) {
-        printed = (unsigned char *) global_hooks.reallocate(buffer->buffer, buffer->offset + 1);
-        if (printed == NULL) {
-            PyErr_SetString(PyExc_MemoryError, "Failed to reallocate memory for buffer");
-            Py_RETURN_NONE;
-        }
-        buffer->buffer = NULL;
-    } else /* otherwise copy the JSON over to a new buffer */
-    {
-        printed = (unsigned char *) global_hooks.allocate(buffer->offset + 1);
-        if (printed == NULL) {
-            PyErr_SetString(PyExc_MemoryError, "Failed to reallocate memory for buffer");
-            Py_RETURN_NONE;
-        }
-        memcpy(printed, buffer->buffer, cjson_min(buffer->length, buffer->offset + 1));
-        printed[buffer->offset] = '\0'; /* just to be sure */
-
-        /* free the buffer */
-        global_hooks.deallocate(buffer->buffer);
-    }
-
-    return PyUnicode_FromString(printed);
+    PyObject* re = PyUnicode_FromString(buffer->buffer);
+    global_hooks.deallocate(buffer->buffer);
+    return re;
 }
 
 PyObject *pycJSON_FileEncode(PyObject *self, PyObject *args, PyObject *kwargs) {
