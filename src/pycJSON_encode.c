@@ -377,7 +377,11 @@ static cJSON_bool print_array(const PyObject * const item, printbuffer * const o
     unsigned char *output_pointer = NULL;
     size_t length = 0;
     PyObject *iter = PyObject_GetIter(item);
-
+    if(iter == NULL)
+    {
+        PyErr_SetString(PyExc_TypeError, "TypeError: Object is not iterable");
+        return false;
+    }
     if (output_buffer == NULL)
     {
         return false;
@@ -403,7 +407,9 @@ static cJSON_bool print_array(const PyObject * const item, printbuffer * const o
             return false;
         }
         update_offset(output_buffer);
-        if (next_element = PyIter_Next(iter), next_element)
+        Py_DecRef(next_element);
+        next_element = PyIter_Next(iter);
+        if (next_element)
         {
             length = (size_t) (output_buffer->format ? 2 : 1);
             output_pointer = ensure(output_buffer, length + 1);
@@ -421,6 +427,7 @@ static cJSON_bool print_array(const PyObject * const item, printbuffer * const o
         }
     }
     Py_DecRef(iter);
+    iter = NULL;
 
     output_pointer = ensure(output_buffer, 2);
     if (output_pointer == NULL)
@@ -434,78 +441,154 @@ static cJSON_bool print_array(const PyObject * const item, printbuffer * const o
     return true;
 }
 
-/* Render an array to text */
-static cJSON_bool print_dict(const PyObject * const item, printbuffer * const output_buffer)
+/* Render an object to text. */
+static cJSON_bool print_object(const PyObject * const item, printbuffer * const output_buffer)
 {
     unsigned char *output_pointer = NULL;
     size_t length = 0;
-    Py_ssize_t index = 0;
     PyObject *iter = PyObject_GetIter(item);
+    if(iter == NULL)
+    {
+        PyErr_SetString(PyExc_TypeError, "TypeError: Object is not iterable");
+        return false;
+    }
 
     if (output_buffer == NULL)
     {
         return false;
     }
 
-    /* Compose the output array. */
-    /* opening square bracket */
-    output_pointer = ensure(output_buffer, 1);
+    /* Compose the output: */
+    length = (size_t) (output_buffer->format ? 2 : 1); /* fmt: {\n */
+    output_pointer = ensure(output_buffer, length + 1);
     if (output_pointer == NULL)
     {
         return false;
     }
 
-    *output_pointer = '{';
-    output_buffer->offset++;
+    *output_pointer++ = '{';
     output_buffer->depth++;
+    if (output_buffer->format)
+    {
+        *output_pointer++ = '\n';
+    }
+    output_buffer->offset += length;
     PyObject* next_element = PyIter_Next(iter);
     while (next_element)
     {
-        if (!print_value(next_element, output_buffer))
+        if (output_buffer->format)
         {
-            return false;
+            size_t i;
+            output_pointer = ensure(output_buffer, output_buffer->depth);
+            if (output_pointer == NULL)
+            {
+                return false;
+            }
+            for (i = 0; i < output_buffer->depth; i++)
+            {
+                *output_pointer++ = '\t';
+            }
+            output_buffer->offset += output_buffer->depth;
         }
+
+        /* print key */
+        if(PyUnicode_Check(next_element))
+            if(!print_string(next_element, output_buffer)) return false;
+        else if(next_element == Py_None){
+            unsigned char *output = ensure(output_buffer, 5);
+            if (output == NULL)
+            {
+                return false;
+            }
+            strcpy((char*)output, "null");
+        }else if(PyBool_Check(next_element)){
+            if(PyObject_IsTrue(next_element)){
+                unsigned char *output = ensure(output_buffer, 5);
+                if (output == NULL)
+                {
+                    return false;
+                }
+                strcpy((char*)output, "true");
+            }else{
+                unsigned char *output = ensure(output_buffer, 6);
+                if (output == NULL)
+                {
+                    return false;
+                }
+                strcpy((char*)output, "false");
+            }
+        }
+        else if(PyNumber_Check(next_element)){
+            PyObject_Print(next_element, stdout, 0);
+            PyObject* str = PyObject_Str(next_element);
+            if(!print_string(str, output_buffer)){
+                Py_DecRef(str);
+                return false;
+            }
+            Py_DecRef(str);
+        }else{
+            PyErr_SetString(PyExc_TypeError, "TypeError: Key must be ");
+            Py_RETURN_NONE;
+        }
+        
         update_offset(output_buffer);
+
         length = (size_t) (output_buffer->format ? 2 : 1);
-        output_pointer = ensure(output_buffer, length + 1);
+        output_pointer = ensure(output_buffer, length);
         if (output_pointer == NULL)
         {
             return false;
         }
         *output_pointer++ = ':';
-        if(output_buffer->format)
+        if (output_buffer->format)
         {
-            *output_pointer++ = ' ';
+            *output_pointer++ = '\t';
         }
         output_buffer->offset += length;
+
+        /* print value */
         if (!print_value(PyDict_GetItem(item, next_element), output_buffer))
         {
             return false;
         }
         update_offset(output_buffer);
-        if (next_element = PyIter_Next(iter), next_element)
+
+        Py_DecRef(next_element);
+        next_element = PyIter_Next(iter);
+    
+        /* print comma if not last */
+        length = ((size_t)(output_buffer->format ? 1 : 0) + (size_t)(next_element ? 1 : 0));
+        output_pointer = ensure(output_buffer, length + 1);
+        if (output_pointer == NULL)
         {
-            length = (size_t) (output_buffer->format ? 2 : 1);
-            output_pointer = ensure(output_buffer, length + 1);
-            if (output_pointer == NULL)
-            {
-                return false;
-            }
-            *output_pointer++ = ',';
-            if(output_buffer->format)
-            {
-                *output_pointer++ = ' ';
-            }
-            *output_pointer = '\0';
-            output_buffer->offset += length;
+            return false;
         }
+        if (next_element)
+        {
+            *output_pointer++ = ',';
+        }
+
+        if (output_buffer->format)
+        {
+            *output_pointer++ = '\n';
+        }
+        *output_pointer = '\0';
+        output_buffer->offset += length;
     }
     Py_DecRef(iter);
 
-    output_pointer = ensure(output_buffer, 2);
+    output_pointer = ensure(output_buffer, output_buffer->format ? (output_buffer->depth + 1) : 2);
     if (output_pointer == NULL)
     {
         return false;
+    }
+    if (output_buffer->format)
+    {
+        size_t i;
+        for (i = 0; i < (output_buffer->depth - 1); i++)
+        {
+            *output_pointer++ = '\t';
+        }
     }
     *output_pointer++ = '}';
     *output_pointer = '\0';
@@ -513,8 +596,6 @@ static cJSON_bool print_dict(const PyObject * const item, printbuffer * const ou
 
     return true;
 }
-
-
 
 /* Render a value to text. */
 static cJSON_bool print_value(const PyObject* const item, printbuffer * const output_buffer)
@@ -559,7 +640,7 @@ static cJSON_bool print_value(const PyObject* const item, printbuffer * const ou
     else if(PyList_Check(item) || PyTuple_Check(item))
         return print_array(item, output_buffer);
     else if(PyDict_Check(item))
-        return print_dict(item, output_buffer);
+        return print_object(item, output_buffer);
     else{
         PyErr_SetString(PyExc_TypeError, "TypeError: Object of type is not JSON serializable"); // TODO ?
         Py_RETURN_NONE;
