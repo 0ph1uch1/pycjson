@@ -25,13 +25,13 @@ class TestEncode(unittest.TestCase):
             [],
             {},
             dict({a: b for a in range(10) for b in range(10)}),  # set
-            # 321321432.231543245,  # large float # TODO assert fail in decimal part length
-            "锟斤拷"
+            {"啊啊啊": "ß"},
+            321321432.231543245,  # large float # TODO assert fail in decimal part length
         ]
 
         for case in test_cases:
-            re_json = json.dumps(case, indent=None, separators=(",", ":"), ensure_ascii=False)
-            re_cjson = cjson.dumps(case)  # json formatted in default
+            re_json = json.dumps(case, indent=None, separators=(",", ":"),ensure_ascii=False)
+            re_cjson = cjson.dumps(case)
             self.assertEqual(re_cjson, re_json)
 
     def _check(self, a, b):
