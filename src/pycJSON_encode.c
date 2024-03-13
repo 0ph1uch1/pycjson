@@ -527,7 +527,7 @@ static cJSON_bool print_value(const PyObject *const item, printbuffer *const out
         return print_object(item, output_buffer);
     else {
         PyErr_SetString(PyExc_TypeError, "TypeError: Object of type is not JSON serializable"); // TODO ?
-        Py_RETURN_NONE;
+        return cJSON_False;
     }
 
     // No cJSON_Raw?
