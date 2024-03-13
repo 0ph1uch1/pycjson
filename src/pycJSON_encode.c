@@ -8,33 +8,22 @@
 
 #define cjson_min(a, b) (((a) < (b)) ? (a) : (b))
 
+#define CJSON_PRINTBUFFER_MAX_STACK_SIZE (1024 * 256)
+
+typedef struct printbuffer printbuffer;
+
 typedef struct internal_hooks {
-    void *(CJSON_CDECL *allocate)(size_t size);
-    void(CJSON_CDECL *deallocate)(void *pointer);
-    void *(CJSON_CDECL *reallocate)(void *pointer, size_t size);
+    void(CJSON_CDECL *deallocate_self)(printbuffer *);
+    void *(CJSON_CDECL *reallocate)(printbuffer *, size_t size, size_t copy_len);
 } internal_hooks;
 
-#if defined(_MSC_VER)
-/* work around MSVC error C2322: '...' address of dllimport '...' is not static */
-static void *CJSON_CDECL internal_malloc(size_t size) {
-    return malloc(size);
-}
-static void CJSON_CDECL internal_free(void *pointer) {
-    free(pointer);
-}
-static void *CJSON_CDECL internal_realloc(void *pointer, size_t size) {
-    return realloc(pointer, size);
-}
-#else
-#define internal_malloc malloc
-#define internal_free free
-#define internal_realloc realloc
-#endif
+static void CJSON_CDECL internal_free(printbuffer *);
 
-static internal_hooks global_hooks = {internal_malloc, internal_free, internal_realloc};
+static void *CJSON_CDECL internal_realloc(printbuffer *, size_t, size_t);
 
-typedef struct
-{
+static internal_hooks global_hooks = {internal_free, internal_realloc};
+
+typedef struct printbuffer {
     unsigned char *buffer;
     size_t length;
     size_t offset;
@@ -42,6 +31,7 @@ typedef struct
     cJSON_bool noalloc;
     cJSON_bool format; /* is this print a formatted print */
     internal_hooks hooks;
+    cJSON_bool using_heap;
 } printbuffer;
 
 static cJSON_bool print_value(const PyObject *const item, printbuffer *const output_buffer);
@@ -86,32 +76,11 @@ static unsigned char *ensure(printbuffer *const p, size_t needed) {
         newsize = needed * 2;
     }
 
-    if (p->hooks.reallocate != NULL) {
-        /* reallocate with realloc if available */
-        newbuffer = (unsigned char *) p->hooks.reallocate(p->buffer, newsize);
-        if (newbuffer == NULL) {
-            p->hooks.deallocate(p->buffer);
-            p->length = 0;
-            p->buffer = NULL;
-
-            return NULL;
-        }
-    } else {
-        /* otherwise reallocate manually */
-        newbuffer = (unsigned char *) p->hooks.allocate(newsize);
-        if (!newbuffer) {
-            p->hooks.deallocate(p->buffer);
-            p->length = 0;
-            p->buffer = NULL;
-
-            return NULL;
-        }
-
-        memcpy(newbuffer, p->buffer, p->offset + 1);
-        p->hooks.deallocate(p->buffer);
+    /* reallocate with realloc if available */
+    p->hooks.reallocate(p, newsize, p->offset + 1);
+    if (p->buffer == NULL) {
+        return NULL;
     }
-    p->length = newsize;
-    p->buffer = newbuffer;
 
     return newbuffer + p->offset;
 }
@@ -581,15 +550,19 @@ static cJSON_bool print_value(const PyObject *const item, printbuffer *const out
     //     return true;
     // }
 }
+
+
 PyObject *pycJSON_Encode(PyObject *self, PyObject *args, PyObject *kwargs) {
-    static const size_t default_buffer_size = 256;
+    static const size_t default_buffer_size = CJSON_PRINTBUFFER_MAX_STACK_SIZE;
     printbuffer buffer[1];
     unsigned char *printed = NULL;
 
     memset(buffer, 0, sizeof(buffer));
 
+    unsigned char stack_buffer[CJSON_PRINTBUFFER_MAX_STACK_SIZE];
+
     /* create buffer */
-    buffer->buffer = (unsigned char *) global_hooks.allocate(default_buffer_size);
+    buffer->buffer = stack_buffer; //(unsigned char *) global_hooks.allocate(default_buffer_size);
     buffer->length = default_buffer_size;
     buffer->format = kwargs && PyDict_Contains(kwargs, PyUnicode_FromString("format")) && PyObject_IsTrue(PyDict_GetItem(kwargs, PyUnicode_FromString("format")));
     buffer->hooks = global_hooks;
@@ -605,11 +578,61 @@ PyObject *pycJSON_Encode(PyObject *self, PyObject *args, PyObject *kwargs) {
 
     update_offset(buffer);
 
-    PyObject* re = PyUnicode_FromString(buffer->buffer);
-    global_hooks.deallocate(buffer->buffer);
+    PyObject *re = PyUnicode_FromString(buffer->buffer);
+    global_hooks.deallocate_self(buffer);
     return re;
 }
 
 PyObject *pycJSON_FileEncode(PyObject *self, PyObject *args, PyObject *kwargs) {
     Py_RETURN_NOTIMPLEMENTED;
+}
+
+static void CJSON_CDECL internal_free(printbuffer *buffer) {
+    if (buffer->using_heap) {
+        free(buffer->buffer);
+    }
+    buffer->buffer = NULL;
+    buffer->length = 0;
+}
+
+static void *CJSON_CDECL internal_realloc(printbuffer *buffer, size_t size, size_t copy_len) {
+    if (size > INT_MAX) {
+        if (buffer->buffer != NULL && buffer->using_heap) {
+            free(buffer->buffer);
+        }
+        buffer->buffer = NULL;
+        buffer->length = 0;
+        return NULL;
+    }
+    if (size <= buffer->length) {
+        return buffer->buffer;
+    }
+    if (size < CJSON_PRINTBUFFER_MAX_STACK_SIZE && !buffer->using_heap) {
+        // no copy, using current stack buffer
+        if (buffer->buffer == NULL) {
+            // should not reach here
+            buffer->length = 0;
+            return NULL;
+        }
+        buffer->length = size;
+        return buffer->buffer;
+    }
+    unsigned char *newbuffer = (unsigned char *) malloc(size);
+    if (newbuffer == NULL) {
+        // fail
+        if (buffer->using_heap && buffer->buffer != NULL) {
+            free(buffer->buffer);
+        }
+        buffer->buffer = NULL;
+        buffer->length = 0;
+        return NULL;
+    }
+    memcpy(newbuffer, buffer->buffer, cjson_min(copy_len, size));
+    if (buffer->using_heap && buffer->buffer != NULL) {
+        free(buffer->buffer);
+    }
+    buffer->buffer = newbuffer;
+    buffer->length = size;
+    buffer->using_heap = true;
+    return newbuffer;
 }
