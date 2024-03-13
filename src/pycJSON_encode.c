@@ -34,7 +34,8 @@ typedef struct printbuffer {
     cJSON_bool using_heap;
 } printbuffer;
 
-static cJSON_bool print_value(const PyObject *const item, printbuffer *const output_buffer);
+// forward declaration
+static cJSON_bool print_value(PyObject * item, printbuffer *const output_buffer);
 
 /* realloc printbuffer if necessary to have at least "needed" bytes more */
 static unsigned char *ensure(printbuffer *const p, size_t needed) {
@@ -105,21 +106,14 @@ static unsigned char get_decimal_point(void) {
 #endif
 }
 
-/* securely comparison of floating-point variables */
-static cJSON_bool compare_double(double a, double b) {
-    double maxVal = fabs(a) > fabs(b) ? fabs(a) : fabs(b);
-    return (fabs(a - b) <= maxVal * DBL_EPSILON);
-}
-
 /* Render the number nicely from the given item into a string. */
-static cJSON_bool print_number(PyObject *const item, printbuffer *const output_buffer) {
+static cJSON_bool print_number(PyObject * item, printbuffer *const output_buffer) {
     unsigned char *output_pointer = NULL;
 
     int length = 0;
     size_t i = 0;
-    unsigned char number_buffer[26] = {0}; /* temporary buffer to print the number into */
+    unsigned char number_buffer[32] = {0}; /* temporary buffer to print the number into */
     unsigned char decimal_point = get_decimal_point();
-    double test = 0.0;
 
     if (output_buffer == NULL) {
         return false;
@@ -134,6 +128,7 @@ static cJSON_bool print_number(PyObject *const item, printbuffer *const output_b
             PyErr_SetString(PyExc_TypeError, "Number is not a float");
             return false;
         }
+
         /* This checks for NaN and Infinity */
         if (isinf(d)) {
             length = sprintf((char *) number_buffer, "Infinity");
@@ -144,11 +139,11 @@ static cJSON_bool print_number(PyObject *const item, printbuffer *const output_b
             // EDITED: 15 -> 16 for python
             length = sprintf((char *) number_buffer, "%1.16g", d);
 
-            /* Check whether the original double can be recovered */
-            if ((sscanf((char *) number_buffer, "%lg", &test) != 1) || !compare_double((double) test, d)) {
-                /* If not, print with 17 decimal places of precision */
-                length = sprintf((char *) number_buffer, "%1.17g", d);
-            }
+            // /* Check whether the original double can be recovered */
+            // if ((sscanf((char *) number_buffer, "%lg", &test) != 1) || !compare_double((double) test, d)) {
+            //     /* If not, print with 17 decimal places of precision */
+            //     length = sprintf((char *) number_buffer, "%1.17g", d);
+            // }
         }
     }
 
@@ -181,7 +176,7 @@ static cJSON_bool print_number(PyObject *const item, printbuffer *const output_b
 }
 
 /* Render the cstring provided to an escaped version that can be printed. */
-static cJSON_bool print_string_ptr(const unsigned char *const input, printbuffer *const output_buffer) {
+static cJSON_bool print_string_ptr(const unsigned char* input, printbuffer *const output_buffer) {
     const unsigned char *input_pointer = NULL;
     unsigned char *output = NULL;
     unsigned char *output_pointer = NULL;
@@ -288,12 +283,12 @@ static cJSON_bool print_string_ptr(const unsigned char *const input, printbuffer
     return true;
 }
 
-static cJSON_bool print_string(PyObject *const item, printbuffer *const buffer) {
+static cJSON_bool print_string(PyObject * item, printbuffer *const buffer) {
     return print_string_ptr((const unsigned char *) PyUnicode_AsUTF8(item), buffer);
 }
 
 /* Render an array to text */
-static cJSON_bool print_array(const PyObject *const item, printbuffer *const output_buffer) {
+static cJSON_bool print_array(PyObject* item, printbuffer *const output_buffer) {
     unsigned char *output_pointer = NULL;
     size_t length = 0;
     PyObject *iter = PyObject_GetIter(item);
@@ -353,7 +348,7 @@ static cJSON_bool print_array(const PyObject *const item, printbuffer *const out
 }
 
 /* Render an object to text. */
-static cJSON_bool print_object(const PyObject *const item, printbuffer *const output_buffer) {
+static cJSON_bool print_object(PyObject* item, printbuffer *const output_buffer) {
     unsigned char *output_pointer = NULL;
     size_t length = 0;
     PyObject *iter = PyObject_GetIter(item);
@@ -487,7 +482,7 @@ static cJSON_bool print_object(const PyObject *const item, printbuffer *const ou
 }
 
 /* Render a value to text. */
-static cJSON_bool print_value(const PyObject *const item, printbuffer *const output_buffer) {
+static cJSON_bool print_value(PyObject * item, printbuffer *const output_buffer) {
     unsigned char *output = NULL;
 
     if ((item == NULL) || (output_buffer == NULL)) {
@@ -554,7 +549,6 @@ static cJSON_bool print_value(const PyObject *const item, printbuffer *const out
 PyObject *pycJSON_Encode(PyObject *self, PyObject *args, PyObject *kwargs) {
     static const size_t default_buffer_size = CJSON_PRINTBUFFER_MAX_STACK_SIZE;
     printbuffer buffer[1];
-    unsigned char *printed = NULL;
 
     memset(buffer, 0, sizeof(buffer));
 
@@ -577,7 +571,7 @@ PyObject *pycJSON_Encode(PyObject *self, PyObject *args, PyObject *kwargs) {
 
     update_offset(buffer);
 
-    PyObject *re = PyUnicode_FromString(buffer->buffer);
+    PyObject *re = PyUnicode_FromString((const char *)buffer->buffer);
     global_hooks.deallocate_self(buffer);
     return re;
 }
