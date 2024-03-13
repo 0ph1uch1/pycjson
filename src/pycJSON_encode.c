@@ -35,7 +35,7 @@ typedef struct printbuffer {
 } printbuffer;
 
 // forward declaration
-static cJSON_bool print_value(PyObject * item, printbuffer *const output_buffer);
+static cJSON_bool print_value(PyObject *item, printbuffer *const output_buffer);
 
 /* realloc printbuffer if necessary to have at least "needed" bytes more */
 static unsigned char *ensure(printbuffer *const p, size_t needed) {
@@ -107,7 +107,7 @@ static unsigned char get_decimal_point(void) {
 }
 
 /* Render the number nicely from the given item into a string. */
-static cJSON_bool print_number(PyObject * item, printbuffer *const output_buffer) {
+static cJSON_bool print_number(PyObject *item, printbuffer *const output_buffer) {
     unsigned char *output_pointer = NULL;
 
     int length = 0;
@@ -176,7 +176,7 @@ static cJSON_bool print_number(PyObject * item, printbuffer *const output_buffer
 }
 
 /* Render the cstring provided to an escaped version that can be printed. */
-static cJSON_bool print_string_ptr(const unsigned char* input, printbuffer *const output_buffer) {
+static cJSON_bool print_string_ptr(const unsigned char *input, printbuffer *const output_buffer) {
     const unsigned char *input_pointer = NULL;
     unsigned char *output = NULL;
     unsigned char *output_pointer = NULL;
@@ -283,12 +283,12 @@ static cJSON_bool print_string_ptr(const unsigned char* input, printbuffer *cons
     return true;
 }
 
-static cJSON_bool print_string(PyObject * item, printbuffer *const buffer) {
+static cJSON_bool print_string(PyObject *item, printbuffer *const buffer) {
     return print_string_ptr((const unsigned char *) PyUnicode_AsUTF8(item), buffer);
 }
 
 /* Render an array to text */
-static cJSON_bool print_array(PyObject* item, printbuffer *const output_buffer) {
+static cJSON_bool print_array(PyObject *item, printbuffer *const output_buffer) {
     unsigned char *output_pointer = NULL;
     size_t length = 0;
     PyObject *iter = PyObject_GetIter(item);
@@ -348,7 +348,7 @@ static cJSON_bool print_array(PyObject* item, printbuffer *const output_buffer) 
 }
 
 /* Render an object to text. */
-static cJSON_bool print_object(PyObject* item, printbuffer *const output_buffer) {
+static cJSON_bool print_object(PyObject *item, printbuffer *const output_buffer) {
     unsigned char *output_pointer = NULL;
     size_t length = 0;
     PyObject *iter = PyObject_GetIter(item);
@@ -482,7 +482,7 @@ static cJSON_bool print_object(PyObject* item, printbuffer *const output_buffer)
 }
 
 /* Render a value to text. */
-static cJSON_bool print_value(PyObject * item, printbuffer *const output_buffer) {
+static cJSON_bool print_value(PyObject *item, printbuffer *const output_buffer) {
     unsigned char *output = NULL;
 
     if ((item == NULL) || (output_buffer == NULL)) {
@@ -571,7 +571,7 @@ PyObject *pycJSON_Encode(PyObject *self, PyObject *args, PyObject *kwargs) {
 
     update_offset(buffer);
 
-    PyObject *re = PyUnicode_FromString((const char *)buffer->buffer);
+    PyObject *re = PyUnicode_FromString((const char *) buffer->buffer);
     global_hooks.deallocate_self(buffer);
     return re;
 }
