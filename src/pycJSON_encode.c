@@ -38,7 +38,6 @@ static cJSON_bool print_value(const PyObject *const item, printbuffer *const out
 
 /* realloc printbuffer if necessary to have at least "needed" bytes more */
 static unsigned char *ensure(printbuffer *const p, size_t needed) {
-    unsigned char *newbuffer = NULL;
     size_t newsize = 0;
 
     if ((p == NULL) || (p->buffer == NULL)) {
@@ -82,7 +81,7 @@ static unsigned char *ensure(printbuffer *const p, size_t needed) {
         return NULL;
     }
 
-    return newbuffer + p->offset;
+    return p->buffer + p->offset;
 }
 
 /* calculate the new length of the string in a printbuffer and update the offset */
