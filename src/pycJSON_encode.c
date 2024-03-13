@@ -426,7 +426,7 @@ static cJSON_bool print_object(const PyObject *const item, printbuffer *const ou
             Py_DecRef(str);
         } else {
             PyErr_SetString(PyExc_TypeError, "TypeError: Key must be ");
-            Py_RETURN_NONE;
+            return false;
         }
 
         update_offset(output_buffer);
@@ -527,7 +527,7 @@ static cJSON_bool print_value(const PyObject *const item, printbuffer *const out
         return print_object(item, output_buffer);
     else {
         PyErr_SetString(PyExc_TypeError, "TypeError: Object of type is not JSON serializable"); // TODO ?
-        return cJSON_False;
+        return false;
     }
 
     // No cJSON_Raw?
