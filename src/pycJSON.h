@@ -102,6 +102,8 @@ extern "C" {
 #define cJSON_IsReference 256
 #define cJSON_StringIsConst 512
 
+#define true cJSON_True
+#define false cJSON_False
 // /* The cJSON structure: */
 // typedef struct cJSON
 // {
@@ -134,11 +136,11 @@ extern "C" {
 
 typedef int cJSON_bool;
 
-// /* Limits how deeply nested arrays/objects can be before cJSON rejects to parse them.
-//  * This is to prevent stack overflows. */
-// #ifndef CJSON_NESTING_LIMIT
-// #define CJSON_NESTING_LIMIT 1000
-// #endif
+/* Limits how deeply nested arrays/objects can be before cJSON rejects to parse them.
+ * This is to prevent stack overflows. */
+#ifndef CJSON_NESTING_LIMIT
+#define CJSON_NESTING_LIMIT 1000
+#endif
 
 // /* returns the version of cJSON as a string */
 // CJSON_PUBLIC(const char*) cJSON_Version(void);

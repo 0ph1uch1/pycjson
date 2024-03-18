@@ -3,9 +3,6 @@
 #include <float.h>
 #include <math.h>
 
-#define true cJSON_True
-#define false cJSON_False
-
 #define cjson_min(a, b) (((a) < (b)) ? (a) : (b))
 
 #define CJSON_PRINTBUFFER_MAX_STACK_SIZE (1024 * 256)
@@ -131,7 +128,10 @@ static cJSON_bool print_number(PyObject *item, printbuffer *const output_buffer)
 
         /* This checks for NaN and Infinity */
         if (isinf(d)) {
-            length = sprintf((char *) number_buffer, "Infinity");
+            if (d < 0)
+                length = sprintf((char *) number_buffer, "-Infinity");
+            else
+                length = sprintf((char *) number_buffer, "Infinity");
         } else if (isnan(d)) {
             length = sprintf((char *) number_buffer, "NaN");
         } else {
