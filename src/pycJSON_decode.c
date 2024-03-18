@@ -11,9 +11,9 @@
 #define buffer_at_offset(buffer) ((buffer)->content + (buffer)->offset)
 
 typedef struct internal_hooks {
-    void *(CJSON_CDECL *allocate)(size_t size);
+    void *(CJSON_CDECL *allocate)(Py_ssize_t size);
     void(CJSON_CDECL *deallocate)(void *pointer);
-    void *(CJSON_CDECL *reallocate)(void *pointer, size_t size);
+    void *(CJSON_CDECL *reallocate)(void *pointer, Py_ssize_t size);
 } internal_hooks;
 
 #define internal_malloc malloc
@@ -25,9 +25,9 @@ static internal_hooks global_hooks = {internal_malloc, internal_free, internal_r
 typedef struct
 {
     const unsigned char *content;
-    size_t length;
-    size_t offset;
-    size_t depth; /* How deeply nested (in arrays/objects) is the input at the current offset. */
+    Py_ssize_t length;
+    Py_ssize_t offset;
+    Py_ssize_t depth; /* How deeply nested (in arrays/objects) is the input at the current offset. */
     internal_hooks hooks;
 } parse_buffer;
 
@@ -57,7 +57,7 @@ static cJSON_bool parse_value(PyObject **item, parse_buffer *const input_buffer)
 /* parse 4 digit hexadecimal number */
 static unsigned parse_hex4(const unsigned char *const input) {
     unsigned int h = 0;
-    size_t i = 0;
+    Py_ssize_t i = 0;
 
     for (i = 0; i < 4; i++) {
         /* parse digit */
@@ -229,12 +229,12 @@ static cJSON_bool parse_string(PyObject **item, parse_buffer *const input_buffer
 
     {
         /* calculate approximate size of the output (overestimate) */
-        size_t allocation_length = 0;
-        size_t skipped_bytes = 0;
-        while (((size_t) (input_end - input_buffer->content) < input_buffer->length) && (*input_end != '\"')) {
+        Py_ssize_t allocation_length = 0;
+        Py_ssize_t skipped_bytes = 0;
+        while (((Py_ssize_t) (input_end - input_buffer->content) < input_buffer->length) && (*input_end != '\"')) {
             /* is escape sequence */
             if (input_end[0] == '\\') {
-                if ((size_t) (input_end + 1 - input_buffer->content) >= input_buffer->length) {
+                if ((Py_ssize_t) (input_end + 1 - input_buffer->content) >= input_buffer->length) {
                     /* prevent buffer overflow when last input character is a backslash */
                     goto fail;
                 }
@@ -243,12 +243,12 @@ static cJSON_bool parse_string(PyObject **item, parse_buffer *const input_buffer
             }
             input_end++;
         }
-        if (((size_t) (input_end - input_buffer->content) >= input_buffer->length) || (*input_end != '\"')) {
+        if (((Py_ssize_t) (input_end - input_buffer->content) >= input_buffer->length) || (*input_end != '\"')) {
             goto fail; /* string ended unexpectedly */
         }
 
         /* This is at most how much we need for the output */
-        allocation_length = (size_t) (input_end - buffer_at_offset(input_buffer)) - skipped_bytes;
+        allocation_length = (Py_ssize_t) (input_end - buffer_at_offset(input_buffer)) - skipped_bytes;
         output = (unsigned char *) input_buffer->hooks.allocate(allocation_length + sizeof(""));
         if (output == NULL) {
             goto fail; /* allocation failure */
@@ -311,7 +311,7 @@ static cJSON_bool parse_string(PyObject **item, parse_buffer *const input_buffer
 
     *item = PyUnicode_FromString((char *) output);
 
-    input_buffer->offset = (size_t) (input_end - input_buffer->content);
+    input_buffer->offset = (Py_ssize_t) (input_end - input_buffer->content);
     input_buffer->offset++;
 
     return true;
@@ -322,7 +322,7 @@ fail:
     }
 
     if (input_pointer != NULL) {
-        input_buffer->offset = (size_t) (input_pointer - input_buffer->content);
+        input_buffer->offset = (Py_ssize_t) (input_pointer - input_buffer->content);
     }
 
     return false;
@@ -433,7 +433,7 @@ static cJSON_bool parse_number(PyObject **item, parse_buffer *const input_buffer
     unsigned char *after_end = NULL;
     unsigned char number_c_string[64];
     unsigned char decimal_point = get_decimal_point();
-    size_t i = 0;
+    Py_ssize_t i = 0;
 
     if ((input_buffer == NULL) || (input_buffer->content == NULL)) {
         return false;
@@ -483,7 +483,7 @@ loop_end:
     else
         *item = PyFloat_FromDouble(number);
 
-    input_buffer->offset += (size_t) (after_end - number_c_string);
+    input_buffer->offset += (Py_ssize_t) (after_end - number_c_string);
     return true;
 }
 
@@ -659,7 +659,7 @@ static cJSON_bool parse_value(PyObject **item, parse_buffer *const input_buffer)
 
 typedef struct {
     const unsigned char *json;
-    size_t position;
+    Py_ssize_t position;
 } error;
 static error global_error = {NULL, 0};
 
@@ -674,8 +674,8 @@ PyObject *pycJSON_Decode(PyObject *self, PyObject *args, PyObject *kwargs) {
     global_error.position = 0;
 
     PyObject *arg = PyTuple_GET_ITEM(args, 0);
-    const char *value = PyUnicode_AsUTF8(arg);
-    size_t buffer_length = strlen(value);
+    Py_ssize_t buffer_length;
+    const char *value = PyUnicode_AsUTF8AndSize(arg, &buffer_length);
     if (value == NULL || 0 == buffer_length) {
         goto fail;
     }
