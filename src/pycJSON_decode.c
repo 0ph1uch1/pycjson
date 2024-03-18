@@ -1,7 +1,7 @@
 #include "pycJSON.h"
 #include <Python.h>
 #include <math.h>
-
+#include <stdbool.h>
 /* check if the given size is left to read in a given parse buffer (starting with 1) */
 #define can_read(buffer, size) ((buffer != NULL) && (((buffer)->offset + size) <= (buffer)->length))
 /* check if the buffer can be accessed at the given index (starting with 0) */
@@ -601,7 +601,7 @@ static cJSON_bool parse_value(PyObject **item, parse_buffer *const input_buffer)
     /* parse the different types of values */
     /* null */
     if (can_read(input_buffer, 4) && (strncmp((const char *) buffer_at_offset(input_buffer), "null", 4) == 0)) {
-        *item = Py_None;
+        *item = Py_NewRef(Py_None);
         input_buffer->offset += 4;
         return true;
     }
@@ -673,7 +673,12 @@ PyObject *pycJSON_Decode(PyObject *self, PyObject *args, PyObject *kwargs) {
     global_error.json = NULL;
     global_error.position = 0;
 
-    PyObject *arg = PyTuple_GET_ITEM(args, 0);
+    PyObject *arg;
+    if (!PyArg_ParseTuple(args, "U", &arg)) {
+        PyErr_SetString(PyExc_ValueError, "Expected string as the first argument");
+        goto fail;
+    }
+
     Py_ssize_t buffer_length;
     const char *value = PyUnicode_AsUTF8AndSize(arg, &buffer_length);
     if (value == NULL || 0 == buffer_length) {
@@ -726,9 +731,9 @@ fail:
         global_error = local_error;
     }
 
-    PyErr_SetString(PyExc_ValueError, "Failed to parse JSON");
+    // PyErr_SetString(PyExc_ValueError, "Failed to parse JSON");
 
-    Py_RETURN_NONE;
+    return NULL;
 }
 
 PyObject *pycJSON_DecodeFile(PyObject *self, PyObject *args, PyObject *kwargs) {

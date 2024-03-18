@@ -2,7 +2,7 @@
 #include <Python.h>
 #include <float.h>
 #include <math.h>
-
+#include <stdbool.h>
 #define cjson_min(a, b) (((a) < (b)) ? (a) : (b))
 
 #define CJSON_PRINTBUFFER_MAX_STACK_SIZE (1024 * 256)
@@ -32,7 +32,7 @@ typedef struct printbuffer {
 } printbuffer;
 
 // forward declaration
-static cJSON_bool print_value(PyObject *item, printbuffer *const output_buffer);
+static bool print_value(PyObject *item, printbuffer *const output_buffer);
 
 /* realloc printbuffer if necessary to have at least "needed" bytes more */
 static unsigned char *ensure(printbuffer *const p, size_t needed) {
@@ -176,7 +176,7 @@ static cJSON_bool print_number(PyObject *item, printbuffer *const output_buffer)
 }
 
 /* Render the cstring provided to an escaped version that can be printed. */
-static cJSON_bool print_string_ptr(const unsigned char *input, printbuffer *const output_buffer) {
+static bool print_string_ptr(const unsigned char *input, printbuffer *const output_buffer) {
     const unsigned char *input_pointer = NULL;
     unsigned char *output = NULL;
     unsigned char *output_pointer = NULL;
@@ -482,36 +482,36 @@ static cJSON_bool print_object(PyObject *item, printbuffer *const output_buffer)
 }
 
 /* Render a value to text. */
-static cJSON_bool print_value(PyObject *item, printbuffer *const output_buffer) {
+static bool print_value(PyObject *item, printbuffer *const output_buffer) {
     unsigned char *output = NULL;
 
     if ((item == NULL) || (output_buffer == NULL)) {
-        return cJSON_False;
+        return false;
     }
 
     if (item == Py_None) {
         output = ensure(output_buffer, 5);
         if (output == NULL) {
-            return cJSON_False;
+            return false;
         }
         strcpy((char *) output, "null");
-        return cJSON_True;
+        return true;
     }
     if (PyBool_Check(item)) {
         if (PyObject_IsTrue(item)) {
             output = ensure(output_buffer, 5);
             if (output == NULL) {
-                return cJSON_False;
+                return false;
             }
             strcpy((char *) output, "true");
         } else {
             output = ensure(output_buffer, 6);
             if (output == NULL) {
-                return cJSON_False;
+                return false;
             }
             strcpy((char *) output, "false");
         }
-        return cJSON_True;
+        return true;
     } else if (PyUnicode_Check(item))
         return print_string(item, output_buffer);
     else if (PyNumber_Check(item))
@@ -531,14 +531,14 @@ static cJSON_bool print_value(PyObject *item, printbuffer *const output_buffer) 
     //     size_t raw_length = 0;
     //     if (item->valuestring == NULL)
     //     {
-    //         return cJSON_False;
+    //         return false;
     //     }
 
     //     raw_length = strlen(item->valuestring) + sizeof("");
     //     output = ensure(output_buffer, raw_length);
     //     if (output == NULL)
     //     {
-    //         return cJSON_False;
+    //         return false;
     //     }
     //     memcpy(output, item->valuestring, raw_length);
     //     return true;
