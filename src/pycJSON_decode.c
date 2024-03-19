@@ -13,14 +13,12 @@
 typedef struct internal_hooks {
     void *(CJSON_CDECL *allocate)(Py_ssize_t size);
     void(CJSON_CDECL *deallocate)(void *pointer);
-    void *(CJSON_CDECL *reallocate)(void *pointer, Py_ssize_t size);
 } internal_hooks;
 
 #define internal_malloc malloc
 #define internal_free free
-#define internal_realloc realloc
 
-static internal_hooks global_hooks = {internal_malloc, internal_free, internal_realloc};
+static internal_hooks global_hooks = {internal_malloc, internal_free};
 
 typedef struct
 {
@@ -32,13 +30,13 @@ typedef struct
 } parse_buffer;
 
 typedef struct cJSON_Array_Item {
-    PyObject **buffer;
+    PyObject *buffer;
     struct cJSON_Array_Item *next;
 } cJSON_Array_Item;
 
 typedef struct cJSON_Dict_Item {
-    PyObject **key_buffer;
-    PyObject **value_buffer;
+    PyObject *key_buffer;
+    PyObject *value_buffer;
     struct cJSON_Dict_Item *next;
 } cJSON_Dict_Item;
 
@@ -311,6 +309,8 @@ static cJSON_bool parse_string(PyObject **item, parse_buffer *const input_buffer
 
     *item = PyUnicode_FromString((char *) output);
 
+    input_buffer->hooks.deallocate(output);
+
     input_buffer->offset = (Py_ssize_t) (input_end - input_buffer->content);
     input_buffer->offset++;
 
@@ -369,10 +369,7 @@ static cJSON_bool parse_array(PyObject **item, parse_buffer *const input_buffer)
         if (new_item == NULL) {
             goto fail; /* allocation failure */
         }
-        new_item->buffer = input_buffer->hooks.allocate(sizeof(PyObject *));
-        if (new_item->buffer == NULL) {
-            goto fail; /* allocation failure */
-        }
+        new_item->buffer = NULL;
 
         /* attach next item to list */
         if (head == NULL) {
@@ -387,7 +384,7 @@ static cJSON_bool parse_array(PyObject **item, parse_buffer *const input_buffer)
         /* parse next value */
         input_buffer->offset++;
         buffer_skip_whitespace(input_buffer);
-        if (!parse_value(current_item->buffer, input_buffer)) {
+        if (!parse_value(&current_item->buffer, input_buffer)) {
             goto fail; /* failed to parse value */
         }
         buffer_skip_whitespace(input_buffer);
@@ -402,9 +399,8 @@ static cJSON_bool parse_array(PyObject **item, parse_buffer *const input_buffer)
     }
     int i = 0;
     for (current_item = head; current_item;) {
-        PyList_SetItem(*item, i++, *(current_item->buffer));
+        PyList_SetItem(*item, i++, current_item->buffer);
         cJSON_Array_Item *next = current_item->next;
-        input_buffer->hooks.deallocate(current_item->buffer);
         input_buffer->hooks.deallocate(current_item);
         current_item = next;
     }
@@ -419,7 +415,6 @@ success:
 fail:
     while (head) {
         cJSON_Array_Item *next = head->next;
-        input_buffer->hooks.deallocate(head->buffer);
         input_buffer->hooks.deallocate(head);
         head = next;
     }
@@ -522,8 +517,8 @@ static cJSON_bool parse_object(PyObject **item, parse_buffer *const input_buffer
     do {
         /* allocate next item */
         cJSON_Dict_Item *new_item = input_buffer->hooks.allocate(sizeof(cJSON_Dict_Item));
-        new_item->key_buffer = input_buffer->hooks.allocate(sizeof(PyObject *));
-        new_item->value_buffer = input_buffer->hooks.allocate(sizeof(PyObject *));
+        new_item->key_buffer = NULL;
+        new_item->value_buffer = NULL;
         new_item->next = NULL;
         if (new_item == NULL) {
             goto fail; /* allocation failure */
@@ -542,7 +537,7 @@ static cJSON_bool parse_object(PyObject **item, parse_buffer *const input_buffer
         /* parse the name of the child */
         input_buffer->offset++;
         buffer_skip_whitespace(input_buffer);
-        if (!parse_string(new_item->key_buffer, input_buffer)) {
+        if (!parse_string(&new_item->key_buffer, input_buffer)) {
             goto fail; /* failed to parse name */
         }
         buffer_skip_whitespace(input_buffer);
@@ -554,7 +549,7 @@ static cJSON_bool parse_object(PyObject **item, parse_buffer *const input_buffer
         /* parse the value */
         input_buffer->offset++;
         buffer_skip_whitespace(input_buffer);
-        if (!parse_value(new_item->value_buffer, input_buffer)) {
+        if (!parse_value(&new_item->value_buffer, input_buffer)) {
             goto fail; /* failed to parse value */
         }
         buffer_skip_whitespace(input_buffer);
@@ -567,9 +562,7 @@ static cJSON_bool parse_object(PyObject **item, parse_buffer *const input_buffer
     *item = PyDict_New();
     for (current_item = head; current_item;) {
         cJSON_Dict_Item *next = current_item->next;
-        PyDict_SetItem(*item, *(current_item->key_buffer), *(current_item->value_buffer));
-        input_buffer->hooks.deallocate(current_item->key_buffer);
-        input_buffer->hooks.deallocate(current_item->value_buffer);
+        PyDict_SetItem(*item, current_item->key_buffer, current_item->value_buffer);
         input_buffer->hooks.deallocate(current_item);
         current_item = next;
     }
@@ -583,8 +576,6 @@ success:
 fail:
     while (head) {
         cJSON_Dict_Item *next = head->next;
-        input_buffer->hooks.deallocate(head->key_buffer);
-        input_buffer->hooks.deallocate(head->value_buffer);
         input_buffer->hooks.deallocate(head);
         head = next;
     }
@@ -665,7 +656,7 @@ static error global_error = {NULL, 0};
 
 PyObject *pycJSON_Decode(PyObject *self, PyObject *args, PyObject *kwargs) {
     parse_buffer buffer = {0, 0, 0, 0, {0, 0, 0}};
-    PyObject **item = global_hooks.allocate(sizeof(PyObject *));
+    PyObject *item = NULL;
     cJSON_bool require_null_terminated = 0;
     const char **return_parse_end = 0;
 
@@ -688,7 +679,7 @@ PyObject *pycJSON_Decode(PyObject *self, PyObject *args, PyObject *kwargs) {
     buffer.length = buffer_length;
     buffer.offset = 0;
     buffer.hooks = global_hooks;
-    if (!parse_value(item, buffer_skip_whitespace(skip_utf8_bom(&buffer)))) {
+    if (!parse_value(&item, buffer_skip_whitespace(skip_utf8_bom(&buffer)))) {
         /* parse failure. ep is set. */
         goto fail;
     }
@@ -704,14 +695,9 @@ PyObject *pycJSON_Decode(PyObject *self, PyObject *args, PyObject *kwargs) {
         *return_parse_end = (const char *) buffer_at_offset(&buffer);
     }
 
-    PyObject *re = *item;
-    global_hooks.deallocate(item);
-    return re;
+    return item;
 
 fail:
-    if (item != NULL) {
-        global_hooks.deallocate(item);
-    }
 
     if (value != NULL) {
         error local_error;
