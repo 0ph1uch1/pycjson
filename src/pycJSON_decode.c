@@ -76,6 +76,7 @@ static unsigned parse_hex4(const unsigned char *const input) {
 /* converts a UTF-16 literal to UTF-8
  * A literal can be one or two sequences of the form \uXXXX */
 static unsigned char utf16_literal_to_utf8(const unsigned char *const input_pointer, const unsigned char *const input_end, unsigned char **output_pointer) {
+    assert(output_pointer);
     long unsigned int codepoint = 0;
     unsigned int first_code = 0;
     const unsigned char *first_sequence = input_pointer;
@@ -209,6 +210,7 @@ static parse_buffer *skip_utf8_bom(parse_buffer *const buffer) {
 
 /* Parse the input text into an unescaped cinput, and populate item. */
 static cJSON_bool parse_string(PyObject **item, parse_buffer *const input_buffer) {
+    assert(item);
     const unsigned char *input_pointer = buffer_at_offset(input_buffer) + 1;
     const unsigned char *input_end = buffer_at_offset(input_buffer) + 1;
     unsigned char *output_pointer = NULL;
@@ -326,6 +328,7 @@ fail:
 
 /* Build an array from input text. */
 static cJSON_bool parse_array(PyObject **item, parse_buffer *const input_buffer) {
+    assert(item);
     int count = 0;
 
     if (input_buffer->depth >= CJSON_NESTING_LIMIT) {
@@ -361,7 +364,7 @@ static cJSON_bool parse_array(PyObject **item, parse_buffer *const input_buffer)
         /* parse next value */
         input_buffer->offset++;
         buffer_skip_whitespace(input_buffer);
-        PyObject* buffer = NULL;
+        PyObject *buffer = NULL;
         if (!parse_value(&buffer, input_buffer)) {
             goto fail; /* failed to parse value */
         }
@@ -381,7 +384,7 @@ success:
     return true;
 
 fail:
-    Py_DECREF(*item);
+    Py_XDECREF(*item);
     *item = NULL;
 
     return false;
@@ -389,6 +392,7 @@ fail:
 
 /* Parse the input text to generate a number, and populate the result into item. */
 static cJSON_bool parse_number(PyObject **item, parse_buffer *const input_buffer) {
+    assert(item);
     double number = 0;
     unsigned char *after_end = NULL;
     unsigned char number_c_string[64];
@@ -450,7 +454,7 @@ loop_end:
 
 /* Build an object from the text. */
 static cJSON_bool parse_object(PyObject **item, parse_buffer *const input_buffer) {
-
+    assert(item);
     if (input_buffer->depth >= CJSON_NESTING_LIMIT) {
         return false; /* to deeply nested */
     }
@@ -482,7 +486,7 @@ static cJSON_bool parse_object(PyObject **item, parse_buffer *const input_buffer
         /* parse the name of the child */
         input_buffer->offset++;
         buffer_skip_whitespace(input_buffer);
-        PyObject* keyBuffer = NULL;
+        PyObject *keyBuffer = NULL;
         if (!parse_string(&keyBuffer, input_buffer)) {
             goto fail; /* failed to parse name */
         }
@@ -495,7 +499,7 @@ static cJSON_bool parse_object(PyObject **item, parse_buffer *const input_buffer
         /* parse the value */
         input_buffer->offset++;
         buffer_skip_whitespace(input_buffer);
-        PyObject* valueBuffer = NULL;
+        PyObject *valueBuffer = NULL;
         if (!parse_value(&valueBuffer, input_buffer)) {
             goto fail; /* failed to parse value */
         }
@@ -515,7 +519,7 @@ success:
 
 fail:
     PyErr_SetString(PyExc_ValueError, "Failed to parse dictionary");
-    Py_DECREF(*item);
+    Py_XDECREF(*item);
     *item = NULL;
 
     return false;
@@ -523,6 +527,7 @@ fail:
 
 /* Parser core - when encountering text, process appropriately. */
 static cJSON_bool parse_value(PyObject **item, parse_buffer *const input_buffer) {
+    assert(item);
     if ((input_buffer == NULL) || (input_buffer->content == NULL)) {
         return false; /* no input */
     }
@@ -613,7 +618,7 @@ PyObject *pycJSON_Decode(PyObject *self, PyObject *args, PyObject *kwargs) {
     Py_ssize_t buffer_length;
     const char *value = PyUnicode_AsUTF8AndSize(arg, &buffer_length);
     if (value == NULL || 0 == buffer_length) {
-        if(0 == buffer_length)
+        if (0 == buffer_length)
             PyErr_SetString(PyExc_ValueError, "Empty string");
         goto fail;
     }
