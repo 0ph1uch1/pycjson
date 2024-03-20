@@ -28,8 +28,9 @@ class TestEncode(unittest.TestCase):
             [1, 2, 3, 4],
             [155, {}, 2.3, "a", None, True, False, [], {}, 11],
             ("a", 1, 2.3, 2.3, None, True, False, [], {}),
-            {"啊啊啊": "ß"},
+            {"啊啊啊": "ß", "ü": ["\uff02", "\u00f8"]},
             dict({a: b for a in range(10) for b in range(10)}),
+            [[[[[[[[[[[[[[]]]]]]], [[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]
         ]
 
         test_cases = [json.dumps(case, ensure_ascii=False) for case in test_cases]

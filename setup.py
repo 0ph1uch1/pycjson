@@ -3,7 +3,7 @@ import os
 from setuptools import Extension, setup
 
 
-strip_flags = ["-Wl,--strip-all","-g"]
+strip_flags = ["-Wl,--strip-all"]
 
 
 def find_src():

@@ -15,8 +15,13 @@ typedef struct internal_hooks {
     void(CJSON_CDECL *deallocate)(void *pointer);
 } internal_hooks;
 
-#define internal_malloc malloc
-#define internal_free free
+void *internal_malloc(Py_ssize_t size) {
+    // printf("malloc %ld\n", size);
+    return malloc(size);
+}
+void internal_free(void *pointer) {
+    free(pointer);
+}
 
 static internal_hooks global_hooks = {internal_malloc, internal_free};
 
@@ -28,17 +33,6 @@ typedef struct
     Py_ssize_t depth; /* How deeply nested (in arrays/objects) is the input at the current offset. */
     internal_hooks hooks;
 } parse_buffer;
-
-typedef struct cJSON_Array_Item {
-    PyObject *buffer;
-    struct cJSON_Array_Item *next;
-} cJSON_Array_Item;
-
-typedef struct cJSON_Dict_Item {
-    PyObject *key_buffer;
-    PyObject *value_buffer;
-    struct cJSON_Dict_Item *next;
-} cJSON_Dict_Item;
 
 /* get the decimal point character of the current locale */
 static unsigned char get_decimal_point(void) {
@@ -222,6 +216,7 @@ static cJSON_bool parse_string(PyObject **item, parse_buffer *const input_buffer
 
     /* not a string */
     if (buffer_at_offset(input_buffer)[0] != '\"') {
+        PyErr_SetString(PyExc_ValueError, "Failed to parse string: it is not a string");
         goto fail;
     }
 
@@ -293,6 +288,7 @@ static cJSON_bool parse_string(PyObject **item, parse_buffer *const input_buffer
                     sequence_length = utf16_literal_to_utf8(input_pointer, input_end, &output_pointer);
                     if (sequence_length == 0) {
                         /* failed to convert UTF16-literal to UTF-8 */
+                        PyErr_SetString(PyExc_ValueError, "Failed to convert UTF16-literal to UTF-8");
                         goto fail;
                     }
                     break;
@@ -330,8 +326,6 @@ fail:
 
 /* Build an array from input text. */
 static cJSON_bool parse_array(PyObject **item, parse_buffer *const input_buffer) {
-    cJSON_Array_Item *head = NULL; /* head of the linked list */
-    cJSON_Array_Item *current_item = NULL;
     int count = 0;
 
     if (input_buffer->depth >= CJSON_NESTING_LIMIT) {
@@ -341,6 +335,7 @@ static cJSON_bool parse_array(PyObject **item, parse_buffer *const input_buffer)
 
     if (buffer_at_offset(input_buffer)[0] != '[') {
         /* not an array */
+        PyErr_SetString(PyExc_ValueError, "Failed to parse array: it is not an array");
         goto fail;
     }
 
@@ -360,49 +355,22 @@ static cJSON_bool parse_array(PyObject **item, parse_buffer *const input_buffer)
     }
     /* step back to character in front of the first element */
     input_buffer->offset--;
+    *item = PyList_New(0);
     /* loop through the comma separated array elements */
     do {
-        /* allocate next item */
-        cJSON_Array_Item *new_item = input_buffer->hooks.allocate(sizeof(cJSON_Array_Item));
-        new_item->next = NULL;
-        count++;
-        if (new_item == NULL) {
-            goto fail; /* allocation failure */
-        }
-        new_item->buffer = NULL;
-
-        /* attach next item to list */
-        if (head == NULL) {
-            /* start the linked list */
-            current_item = head = new_item;
-        } else {
-            /* add to the end and advance */
-            current_item->next = new_item;
-            current_item = new_item;
-        }
-
         /* parse next value */
         input_buffer->offset++;
         buffer_skip_whitespace(input_buffer);
-        if (!parse_value(&current_item->buffer, input_buffer)) {
+        PyObject* buffer = NULL;
+        if (!parse_value(&buffer, input_buffer)) {
             goto fail; /* failed to parse value */
         }
         buffer_skip_whitespace(input_buffer);
+        PyList_Append(*item, buffer);
     } while (can_access_at_index(input_buffer, 0) && (buffer_at_offset(input_buffer)[0] == ','));
     if (cannot_access_at_index(input_buffer, 0) || buffer_at_offset(input_buffer)[0] != ']') {
+        PyErr_SetString(PyExc_ValueError, "Failed to parse array");
         goto fail; /* expected end of array */
-    }
-    *item = PyList_New(count);
-    if (*item == NULL) {
-        PyErr_SetString(PyExc_MemoryError, "Failed to allocate memory for list");
-        goto fail;
-    }
-    int i = 0;
-    for (current_item = head; current_item;) {
-        PyList_SetItem(*item, i++, current_item->buffer);
-        cJSON_Array_Item *next = current_item->next;
-        input_buffer->hooks.deallocate(current_item);
-        current_item = next;
     }
 
 success:
@@ -413,11 +381,8 @@ success:
     return true;
 
 fail:
-    while (head) {
-        cJSON_Array_Item *next = head->next;
-        input_buffer->hooks.deallocate(head);
-        head = next;
-    }
+    Py_DECREF(*item);
+    *item = NULL;
 
     return false;
 }
@@ -469,6 +434,7 @@ loop_end:
 
     number = strtod((const char *) number_c_string, (char **) &after_end);
     if (number_c_string == after_end) {
+        PyErr_SetString(PyExc_ValueError, "Failed to parse number");
         return false; /* parse_error */
     }
 
@@ -484,8 +450,6 @@ loop_end:
 
 /* Build an object from the text. */
 static cJSON_bool parse_object(PyObject **item, parse_buffer *const input_buffer) {
-    cJSON_Dict_Item *head = NULL; /* linked list head */
-    cJSON_Dict_Item *current_item = NULL;
 
     if (input_buffer->depth >= CJSON_NESTING_LIMIT) {
         return false; /* to deeply nested */
@@ -510,34 +474,16 @@ static cJSON_bool parse_object(PyObject **item, parse_buffer *const input_buffer
         input_buffer->offset--;
         goto fail;
     }
-
+    *item = PyDict_New();
     /* step back to character in front of the first element */
     input_buffer->offset--;
     /* loop through the comma separated array elements */
     do {
-        /* allocate next item */
-        cJSON_Dict_Item *new_item = input_buffer->hooks.allocate(sizeof(cJSON_Dict_Item));
-        new_item->key_buffer = NULL;
-        new_item->value_buffer = NULL;
-        new_item->next = NULL;
-        if (new_item == NULL) {
-            goto fail; /* allocation failure */
-        }
-
-        /* attach next item to list */
-        if (head == NULL) {
-            /* start the linked list */
-            current_item = head = new_item;
-        } else {
-            /* add to the end and advance */
-            current_item->next = new_item;
-            current_item = new_item;
-        }
-
         /* parse the name of the child */
         input_buffer->offset++;
         buffer_skip_whitespace(input_buffer);
-        if (!parse_string(&new_item->key_buffer, input_buffer)) {
+        PyObject* keyBuffer = NULL;
+        if (!parse_string(&keyBuffer, input_buffer)) {
             goto fail; /* failed to parse name */
         }
         buffer_skip_whitespace(input_buffer);
@@ -549,22 +495,16 @@ static cJSON_bool parse_object(PyObject **item, parse_buffer *const input_buffer
         /* parse the value */
         input_buffer->offset++;
         buffer_skip_whitespace(input_buffer);
-        if (!parse_value(&new_item->value_buffer, input_buffer)) {
+        PyObject* valueBuffer = NULL;
+        if (!parse_value(&valueBuffer, input_buffer)) {
             goto fail; /* failed to parse value */
         }
         buffer_skip_whitespace(input_buffer);
+        PyDict_SetItem(*item, keyBuffer, valueBuffer);
     } while (can_access_at_index(input_buffer, 0) && (buffer_at_offset(input_buffer)[0] == ','));
 
     if (cannot_access_at_index(input_buffer, 0) || (buffer_at_offset(input_buffer)[0] != '}')) {
         goto fail; /* expected end of object */
-    }
-
-    *item = PyDict_New();
-    for (current_item = head; current_item;) {
-        cJSON_Dict_Item *next = current_item->next;
-        PyDict_SetItem(*item, current_item->key_buffer, current_item->value_buffer);
-        input_buffer->hooks.deallocate(current_item);
-        current_item = next;
     }
 
 success:
@@ -574,11 +514,9 @@ success:
     return true;
 
 fail:
-    while (head) {
-        cJSON_Dict_Item *next = head->next;
-        input_buffer->hooks.deallocate(head);
-        head = next;
-    }
+    PyErr_SetString(PyExc_ValueError, "Failed to parse dictionary");
+    Py_DECREF(*item);
+    *item = NULL;
 
     return false;
 }
@@ -645,6 +583,8 @@ static cJSON_bool parse_value(PyObject **item, parse_buffer *const input_buffer)
         return parse_object(item, input_buffer);
     }
 
+    PyErr_SetString(PyExc_ValueError, "Unexpected value");
+
     return false;
 }
 
@@ -673,6 +613,8 @@ PyObject *pycJSON_Decode(PyObject *self, PyObject *args, PyObject *kwargs) {
     Py_ssize_t buffer_length;
     const char *value = PyUnicode_AsUTF8AndSize(arg, &buffer_length);
     if (value == NULL || 0 == buffer_length) {
+        if(0 == buffer_length)
+            PyErr_SetString(PyExc_ValueError, "Empty string");
         goto fail;
     }
     buffer.content = (const unsigned char *) value;
@@ -694,7 +636,6 @@ PyObject *pycJSON_Decode(PyObject *self, PyObject *args, PyObject *kwargs) {
     if (return_parse_end) {
         *return_parse_end = (const char *) buffer_at_offset(&buffer);
     }
-
     return item;
 
 fail:
@@ -716,9 +657,7 @@ fail:
 
         global_error = local_error;
     }
-
-    // PyErr_SetString(PyExc_ValueError, "Failed to parse JSON");
-
+    PyErr_Format(PyExc_ValueError, "Failed to parse JSON (position %d)", global_error.position);
     return NULL;
 }
 
