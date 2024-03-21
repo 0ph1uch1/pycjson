@@ -370,6 +370,7 @@ static cJSON_bool parse_array(PyObject **item, parse_buffer *const input_buffer)
         }
         buffer_skip_whitespace(input_buffer);
         PyList_Append(*item, buffer);
+        Py_DECREF(buffer);
     } while (can_access_at_index(input_buffer, 0) && (buffer_at_offset(input_buffer)[0] == ','));
     if (cannot_access_at_index(input_buffer, 0) || buffer_at_offset(input_buffer)[0] != ']') {
         PyErr_SetString(PyExc_ValueError, "Failed to parse array");
@@ -505,6 +506,7 @@ static cJSON_bool parse_object(PyObject **item, parse_buffer *const input_buffer
         }
         buffer_skip_whitespace(input_buffer);
         PyDict_SetItem(*item, keyBuffer, valueBuffer);
+        Py_DECREF(valueBuffer);
     } while (can_access_at_index(input_buffer, 0) && (buffer_at_offset(input_buffer)[0] == ','));
 
     if (cannot_access_at_index(input_buffer, 0) || (buffer_at_offset(input_buffer)[0] != '}')) {
