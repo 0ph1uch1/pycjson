@@ -26,16 +26,6 @@ typedef struct
     internal_hooks hooks;
 } parse_buffer;
 
-/* get the decimal point character of the current locale */
-static unsigned char get_decimal_point(void) {
-#ifdef ENABLE_LOCALES
-    struct lconv *lconv = localeconv();
-    return (unsigned char) lconv->decimal_point[0];
-#else
-    return '.';
-#endif
-}
-
 static cJSON_bool parse_value(PyObject **item, parse_buffer *const input_buffer);
 
 /* parse 4 digit hexadecimal number */
@@ -391,9 +381,10 @@ static cJSON_bool parse_number(PyObject **item, parse_buffer *const input_buffer
     assert(item);
     double number = 0;
     unsigned char *after_end = NULL;
-    unsigned char number_c_string[64];
-    unsigned char decimal_point = get_decimal_point();
+    unsigned char old_ending = 0;
     Py_ssize_t i = 0;
+    cJSON_bool dec = false;
+    const unsigned char* starting_point = buffer_at_offset(input_buffer);
 
     if ((input_buffer == NULL) || (input_buffer->content == NULL)) {
         PyErr_Format(PyExc_ValueError, "Failed to parse number: no input\nposition: %d", input_buffer->offset);
@@ -403,8 +394,12 @@ static cJSON_bool parse_number(PyObject **item, parse_buffer *const input_buffer
     /* copy the number into a temporary buffer and replace '.' with the decimal point
      * of the current locale (for strtod)
      * This also takes care of '\0' not necessarily being available for marking the end of the input */
-    for (i = 0; (i < (sizeof(number_c_string) - 1)) && can_access_at_index(input_buffer, i); i++) {
+    for (i = 0; can_access_at_index(input_buffer, i); i++) {
         switch (buffer_at_offset(input_buffer)[i]) {
+            case '.':
+            case 'e':
+            case 'E':
+                dec = true;
             case '0':
             case '1':
             case '2':
@@ -417,13 +412,6 @@ static cJSON_bool parse_number(PyObject **item, parse_buffer *const input_buffer
             case '9':
             case '+':
             case '-':
-            case 'e':
-            case 'E':
-                number_c_string[i] = buffer_at_offset(input_buffer)[i];
-                break;
-
-            case '.':
-                number_c_string[i] = decimal_point;
                 break;
 
             default:
@@ -431,21 +419,21 @@ static cJSON_bool parse_number(PyObject **item, parse_buffer *const input_buffer
         }
     }
 loop_end:
-    number_c_string[i] = '\0';
+    old_ending = buffer_at_offset(input_buffer)[i];
+    *((char*)(buffer_at_offset(input_buffer) + i)) = '\0';
 
-    number = strtod((const char *) number_c_string, (char **) &after_end);
-    if (number_c_string == after_end) {
-        PyErr_Format(PyExc_ValueError, "Failed to parse number: strtod failed\nposition: %d", input_buffer->offset);
-        return false; /* parse_error */
+    if (dec)
+        *item = PyFloat_FromDouble(strtod((const char*)starting_point, (char **) &after_end));
+    else
+        *item = PyLong_FromString((const char*)starting_point, (char **) &after_end, 10);
+    if(starting_point == after_end || NULL == *item) {
+        PyErr_Format(PyExc_ValueError, "Failed to parse number: invalid number\nposition: %d", input_buffer->offset);
+        *((char*)(buffer_at_offset(input_buffer) + i)) = old_ending;
+        return false;
     }
 
-    // if it is int
-    if (number == (double) (long long) number)
-        *item = PyLong_FromLongLong((long long) number);
-    else
-        *item = PyFloat_FromDouble(number);
-
-    input_buffer->offset += (Py_ssize_t) (after_end - number_c_string);
+    *((char*)(buffer_at_offset(input_buffer) + i)) = old_ending;
+    input_buffer->offset += (Py_ssize_t) (after_end - starting_point);
     return true;
 }
 
