@@ -342,8 +342,7 @@ static cJSON_bool parse_array(PyObject **item, parse_buffer *const input_buffer)
     if (can_access_at_index(input_buffer, 0) && (buffer_at_offset(input_buffer)[0] == ']')) {
         /* empty array */
         *item = PyList_New(0);
-        input_buffer->offset++;
-        return true;
+        goto success;
     }
 
     /* check if we skipped to the end of the buffer */
@@ -469,8 +468,7 @@ static cJSON_bool parse_object(PyObject **item, parse_buffer *const input_buffer
     if (can_access_at_index(input_buffer, 0) && (buffer_at_offset(input_buffer)[0] == '}')) {
         /* empty object */
         *item = PyDict_New();
-        input_buffer->offset++;
-        return true;
+        goto success;
     }
 
     /* check if we skipped to the end of the buffer */
