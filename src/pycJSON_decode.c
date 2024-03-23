@@ -15,15 +15,7 @@ typedef struct internal_hooks {
     void(CJSON_CDECL *deallocate)(void *pointer);
 } internal_hooks;
 
-void *internal_malloc(Py_ssize_t size) {
-    // printf("malloc %ld\n", size);
-    return malloc(size);
-}
-void internal_free(void *pointer) {
-    free(pointer);
-}
-
-static internal_hooks global_hooks = {internal_malloc, internal_free};
+static internal_hooks global_hooks = {malloc, free};
 
 typedef struct
 {
@@ -218,7 +210,7 @@ static cJSON_bool parse_string(PyObject **item, parse_buffer *const input_buffer
 
     /* not a string */
     if (buffer_at_offset(input_buffer)[0] != '\"') {
-        PyErr_SetString(PyExc_ValueError, "Failed to parse string: it is not a string");
+        PyErr_Format(PyExc_ValueError, "Failed to parse string: it is not a string\nposition: %d", input_buffer->offset);
         goto fail;
     }
 
@@ -231,6 +223,7 @@ static cJSON_bool parse_string(PyObject **item, parse_buffer *const input_buffer
             if (input_end[0] == '\\') {
                 if ((Py_ssize_t) (input_end + 1 - input_buffer->content) >= input_buffer->length) {
                     /* prevent buffer overflow when last input character is a backslash */
+                    PyErr_Format(PyExc_ValueError, "Failed to parse string: buffer overflow\nposition: %d", input_buffer->offset);
                     goto fail;
                 }
                 skipped_bytes++;
@@ -239,6 +232,7 @@ static cJSON_bool parse_string(PyObject **item, parse_buffer *const input_buffer
             input_end++;
         }
         if (((Py_ssize_t) (input_end - input_buffer->content) >= input_buffer->length) || (*input_end != '\"')) {
+            PyErr_Format(PyExc_ValueError, "Failed to parse string: string ended unexpectedly\nposition: %d", input_buffer->offset);
             goto fail; /* string ended unexpectedly */
         }
 
@@ -246,6 +240,7 @@ static cJSON_bool parse_string(PyObject **item, parse_buffer *const input_buffer
         allocation_length = (Py_ssize_t) (input_end - buffer_at_offset(input_buffer)) - skipped_bytes;
         output = (unsigned char *) input_buffer->hooks.allocate(allocation_length + sizeof(""));
         if (output == NULL) {
+            PyErr_Format(PyExc_MemoryError, "Failed to parse string: allocation failure\nposition: %d", input_buffer->offset);
             goto fail; /* allocation failure */
         }
     }
@@ -260,6 +255,7 @@ static cJSON_bool parse_string(PyObject **item, parse_buffer *const input_buffer
         else {
             unsigned char sequence_length = 2;
             if ((input_end - input_pointer) < 1) {
+                PyErr_Format(PyExc_ValueError, "Failed to parse string: buffer overflow\nposition: %d", input_buffer->offset);
                 goto fail;
             }
 
@@ -290,7 +286,7 @@ static cJSON_bool parse_string(PyObject **item, parse_buffer *const input_buffer
                     sequence_length = utf16_literal_to_utf8(input_pointer, input_end, &output_pointer);
                     if (sequence_length == 0) {
                         /* failed to convert UTF16-literal to UTF-8 */
-                        PyErr_SetString(PyExc_ValueError, "Failed to convert UTF16-literal to UTF-8");
+                        PyErr_Format(PyExc_ValueError, "Failed to parse string: invalid UTF-16\nposition: %d", input_buffer->offset);
                         goto fail;
                     }
                     break;
@@ -329,16 +325,15 @@ fail:
 /* Build an array from input text. */
 static cJSON_bool parse_array(PyObject **item, parse_buffer *const input_buffer) {
     assert(item);
-    int count = 0;
-
     if (input_buffer->depth >= CJSON_NESTING_LIMIT) {
+        PyErr_Format(PyExc_ValueError, "Failed to parse array: too deeply nested\nposition: %d", input_buffer->offset);
         return false; /* to deeply nested */
     }
     input_buffer->depth++;
 
     if (buffer_at_offset(input_buffer)[0] != '[') {
         /* not an array */
-        PyErr_SetString(PyExc_ValueError, "Failed to parse array: it is not an array");
+        PyErr_Format(PyExc_ValueError, "Failed to parse array: it is not an array\nposition: %d", input_buffer->offset);
         goto fail;
     }
 
@@ -354,6 +349,7 @@ static cJSON_bool parse_array(PyObject **item, parse_buffer *const input_buffer)
     /* check if we skipped to the end of the buffer */
     if (cannot_access_at_index(input_buffer, 0)) {
         input_buffer->offset--;
+        PyErr_Format(PyExc_ValueError, "Failed to parse array: buffer overflow\nposition: %d", input_buffer->offset);
         goto fail;
     }
     /* step back to character in front of the first element */
@@ -373,7 +369,7 @@ static cJSON_bool parse_array(PyObject **item, parse_buffer *const input_buffer)
         Py_DECREF(buffer);
     } while (can_access_at_index(input_buffer, 0) && (buffer_at_offset(input_buffer)[0] == ','));
     if (cannot_access_at_index(input_buffer, 0) || buffer_at_offset(input_buffer)[0] != ']') {
-        PyErr_SetString(PyExc_ValueError, "Failed to parse array");
+        PyErr_Format(PyExc_ValueError, "Failed to parse array: expected end of array\nposition: %d", input_buffer->offset);
         goto fail; /* expected end of array */
     }
 
@@ -401,6 +397,7 @@ static cJSON_bool parse_number(PyObject **item, parse_buffer *const input_buffer
     Py_ssize_t i = 0;
 
     if ((input_buffer == NULL) || (input_buffer->content == NULL)) {
+        PyErr_Format(PyExc_ValueError, "Failed to parse number: no input\nposition: %d", input_buffer->offset);
         return false;
     }
 
@@ -439,7 +436,7 @@ loop_end:
 
     number = strtod((const char *) number_c_string, (char **) &after_end);
     if (number_c_string == after_end) {
-        PyErr_SetString(PyExc_ValueError, "Failed to parse number");
+        PyErr_Format(PyExc_ValueError, "Failed to parse number: strtod failed\nposition: %d", input_buffer->offset);
         return false; /* parse_error */
     }
 
@@ -457,11 +454,13 @@ loop_end:
 static cJSON_bool parse_object(PyObject **item, parse_buffer *const input_buffer) {
     assert(item);
     if (input_buffer->depth >= CJSON_NESTING_LIMIT) {
+        PyErr_Format(PyExc_ValueError, "Failed to parse dictionary: too deeply nested\nposition: %d", input_buffer->offset);
         return false; /* to deeply nested */
     }
     input_buffer->depth++;
 
     if (cannot_access_at_index(input_buffer, 0) || (buffer_at_offset(input_buffer)[0] != '{')) {
+        PyErr_Format(PyExc_ValueError, "Failed to parse dictionary: it is not an object\nposition: %d", input_buffer->offset);
         goto fail; /* not an object */
     }
 
@@ -477,6 +476,7 @@ static cJSON_bool parse_object(PyObject **item, parse_buffer *const input_buffer
     /* check if we skipped to the end of the buffer */
     if (cannot_access_at_index(input_buffer, 0)) {
         input_buffer->offset--;
+        PyErr_Format(PyExc_ValueError, "Failed to parse dictionary: buffer overflow\nposition: %d", input_buffer->offset);
         goto fail;
     }
     *item = PyDict_New();
@@ -494,6 +494,7 @@ static cJSON_bool parse_object(PyObject **item, parse_buffer *const input_buffer
         buffer_skip_whitespace(input_buffer);
 
         if (cannot_access_at_index(input_buffer, 0) || (buffer_at_offset(input_buffer)[0] != ':')) {
+            PyErr_Format(PyExc_ValueError, "Failed to parse dictionary: expected colon\nposition: %d", input_buffer->offset);
             goto fail; /* invalid object */
         }
 
@@ -510,6 +511,7 @@ static cJSON_bool parse_object(PyObject **item, parse_buffer *const input_buffer
     } while (can_access_at_index(input_buffer, 0) && (buffer_at_offset(input_buffer)[0] == ','));
 
     if (cannot_access_at_index(input_buffer, 0) || (buffer_at_offset(input_buffer)[0] != '}')) {
+        PyErr_Format(PyExc_ValueError, "Failed to parse dictionary: expected end of object\nposition: %d", input_buffer->offset);
         goto fail; /* expected end of object */
     }
 
@@ -520,7 +522,6 @@ success:
     return true;
 
 fail:
-    PyErr_SetString(PyExc_ValueError, "Failed to parse dictionary");
     Py_XDECREF(*item);
     *item = NULL;
 
@@ -531,6 +532,7 @@ fail:
 static cJSON_bool parse_value(PyObject **item, parse_buffer *const input_buffer) {
     assert(item);
     if ((input_buffer == NULL) || (input_buffer->content == NULL)) {
+        PyErr_Format(PyExc_ValueError, "Failed to parse value: no input\nposition: %d", input_buffer->offset);
         return false; /* no input */
     }
 
@@ -590,7 +592,7 @@ static cJSON_bool parse_value(PyObject **item, parse_buffer *const input_buffer)
         return parse_object(item, input_buffer);
     }
 
-    PyErr_SetString(PyExc_ValueError, "Unexpected value");
+    PyErr_Format(PyExc_ValueError, "Failed to parse value: invalid value\nposition: %d", input_buffer->offset);
 
     return false;
 }
@@ -602,7 +604,7 @@ typedef struct {
 static error global_error = {NULL, 0};
 
 PyObject *pycJSON_Decode(PyObject *self, PyObject *args, PyObject *kwargs) {
-    parse_buffer buffer = {0, 0, 0, 0, {0, 0, 0}};
+    parse_buffer buffer = {0, 0, 0, 0, {0, 0}};
     PyObject *item = NULL;
     cJSON_bool require_null_terminated = 0;
     const char **return_parse_end = 0;
@@ -613,7 +615,7 @@ PyObject *pycJSON_Decode(PyObject *self, PyObject *args, PyObject *kwargs) {
 
     PyObject *arg;
     if (!PyArg_ParseTuple(args, "U", &arg)) {
-        PyErr_SetString(PyExc_ValueError, "Expected string as the first argument");
+        PyErr_Format(PyExc_ValueError, "Failed to parse JSON: invalid argument, expected string at first argument");
         goto fail;
     }
 
@@ -647,7 +649,7 @@ PyObject *pycJSON_Decode(PyObject *self, PyObject *args, PyObject *kwargs) {
 
 fail:
 
-    if (value != NULL) {
+    if (value != NULL && !PyErr_Occurred()) {
         error local_error;
         local_error.json = (const unsigned char *) value;
         local_error.position = 0;
@@ -663,8 +665,8 @@ fail:
         }
 
         global_error = local_error;
+        PyErr_Format(PyExc_ValueError, "Failed to parse JSON (position %d)", global_error.position);
     }
-    PyErr_Format(PyExc_ValueError, "Failed to parse JSON (position %d)", global_error.position);
     return NULL;
 }
 

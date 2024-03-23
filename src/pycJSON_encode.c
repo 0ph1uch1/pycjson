@@ -323,6 +323,7 @@ static cJSON_bool print_array(PyObject *item, printbuffer *const output_buffer) 
             length = (size_t) (output_buffer->format ? 2 : 1);
             output_pointer = ensure(output_buffer, length + 1);
             if (output_pointer == NULL) {
+
                 return false;
             }
             *output_pointer++ = ',';
@@ -338,6 +339,7 @@ static cJSON_bool print_array(PyObject *item, printbuffer *const output_buffer) 
 
     output_pointer = ensure(output_buffer, 2);
     if (output_pointer == NULL) {
+        PyErr_SetString(PyExc_MemoryError, "Failed to allocate memory for buffer");
         return false;
     }
     *output_pointer++ = ']';
@@ -418,9 +420,9 @@ static cJSON_bool print_object(PyObject *item, printbuffer *const output_buffer)
                 Py_DecRef(str);
                 return false;
             }
-            Py_DecRef(str);
+            Py_DECREF(str);
         } else {
-            PyErr_SetString(PyExc_TypeError, "TypeError: Key must be ");
+            PyErr_SetString(PyExc_TypeError, "TypeError: Key must be str, None, bool or number");
             return false;
         }
 
@@ -462,7 +464,7 @@ static cJSON_bool print_object(PyObject *item, printbuffer *const output_buffer)
         *output_pointer = '\0';
         output_buffer->offset += length;
     }
-    Py_DecRef(iter);
+    Py_DECREF(iter);
 
     output_pointer = ensure(output_buffer, output_buffer->format ? (output_buffer->depth + 1) : 2);
     if (output_pointer == NULL) {
@@ -565,7 +567,7 @@ PyObject *pycJSON_Encode(PyObject *self, PyObject *args, PyObject *kwargs) {
     }
     PyObject *arg = PyTuple_GET_ITEM(args, 0);
     if (!print_value(arg, buffer)) {
-        PyErr_SetString(PyExc_TypeError, "Failed to encode object");
+        if(!PyErr_Occurred()) PyErr_SetString(PyExc_TypeError, "Failed to encode object");
         Py_RETURN_NONE;
     }
 
