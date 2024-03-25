@@ -9,6 +9,7 @@
 #define cannot_access_at_index(buffer, index) (!can_access_at_index(buffer, index))
 /* get a pointer to the buffer at the position */
 #define buffer_at_offset(buffer) ((buffer)->content + (buffer)->offset)
+#define STACK_BUFFER_SIZE 512
 
 typedef struct internal_hooks {
     void *(CJSON_CDECL *allocate)(Py_ssize_t size);
@@ -199,6 +200,7 @@ static cJSON_bool parse_string(PyObject **item, parse_buffer *const input_buffer
     unsigned char *output = NULL;
     // by default, it is ASCII string
     int fixed_utf8_len = 1;
+    unsigned char output_buffer[STACK_BUFFER_SIZE];
 
     /* not a string */
     if (buffer_at_offset(input_buffer)[0] != '\"') {
@@ -230,7 +232,10 @@ static cJSON_bool parse_string(PyObject **item, parse_buffer *const input_buffer
 
         /* This is at most how much we need for the output */
         allocation_length = (Py_ssize_t) (input_end - buffer_at_offset(input_buffer)) - skipped_bytes;
-        output = (unsigned char *) input_buffer->hooks.allocate(allocation_length + sizeof(""));
+        if (allocation_length < STACK_BUFFER_SIZE)
+            output = output_buffer;
+        else
+            output = (unsigned char *) input_buffer->hooks.allocate(allocation_length + sizeof(""));
         if (output == NULL) {
             PyErr_Format(PyExc_MemoryError, "Failed to parse string: allocation failure\nposition: %d", input_buffer->offset);
             goto fail; /* allocation failure */
@@ -316,7 +321,9 @@ static cJSON_bool parse_string(PyObject **item, parse_buffer *const input_buffer
         *item = PyUnicode_FromString((char *) output);
     else
         *item = PyUnicode_FromKindAndData(fixed_utf8_len, output, output_pointer - output);
-    input_buffer->hooks.deallocate(output);
+
+    if (output != output_buffer)
+        input_buffer->hooks.deallocate(output);
 
     input_buffer->offset = (Py_ssize_t) (input_end - input_buffer->content);
     input_buffer->offset++;
@@ -324,7 +331,7 @@ static cJSON_bool parse_string(PyObject **item, parse_buffer *const input_buffer
     return true;
 
 fail:
-    if (output != NULL) {
+    if (output != NULL && output != output_buffer) {
         input_buffer->hooks.deallocate(output);
     }
 
