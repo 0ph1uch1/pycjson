@@ -567,7 +567,7 @@ PyObject *pycJSON_Encode(PyObject *self, PyObject *args, PyObject *kwargs) {
     }
     PyObject *arg = PyTuple_GET_ITEM(args, 0);
     if (!print_value(arg, buffer)) {
-        if(!PyErr_Occurred()) PyErr_SetString(PyExc_TypeError, "Failed to encode object");
+        if (!PyErr_Occurred()) PyErr_SetString(PyExc_TypeError, "Failed to encode object");
         Py_RETURN_NONE;
     }
 

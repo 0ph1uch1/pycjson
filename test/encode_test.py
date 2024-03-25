@@ -36,8 +36,8 @@ class TestEncode(unittest.TestCase):
 
         for case in test_cases:
             re_json = json.dumps(case, indent=None, separators=(",", ":"), ensure_ascii=False)
-            re_cjson = cjson.dumps(case)
             with self.subTest(msg=f'encoding_test(case={case})'):
+                re_cjson = cjson.dumps(case)
                 self.assertEqual(re_cjson, re_json)
 
     def _check(self, a, b):
