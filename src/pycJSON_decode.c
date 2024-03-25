@@ -197,6 +197,7 @@ static cJSON_bool parse_string(PyObject **item, parse_buffer *const input_buffer
     const unsigned char *input_end = buffer_at_offset(input_buffer) + 1;
     unsigned char *output_pointer = NULL;
     unsigned char *output = NULL;
+    unsigned char max_char = 0;
 
     /* not a string */
     if (buffer_at_offset(input_buffer)[0] != '\"') {
@@ -238,6 +239,7 @@ static cJSON_bool parse_string(PyObject **item, parse_buffer *const input_buffer
     output_pointer = output;
     /* loop through the string literal */
     while (input_pointer < input_end) {
+        max_char = max_char < *input_pointer? *input_pointer : max_char;
         if (*input_pointer != '\\') {
             *output_pointer++ = *input_pointer++;
         }
@@ -419,6 +421,10 @@ static cJSON_bool parse_number(PyObject **item, parse_buffer *const input_buffer
         }
     }
 loop_end:
+    if(!can_access_at_index(input_buffer, i) || i == 0) {
+        PyErr_Format(PyExc_ValueError, "Failed to parse number: expected character after number\nposition: %d", input_buffer->offset);
+        return false;
+    }
     old_ending = buffer_at_offset(input_buffer)[i];
     *((char*)(buffer_at_offset(input_buffer) + i)) = '\0';
 
