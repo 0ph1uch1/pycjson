@@ -312,12 +312,11 @@ static cJSON_bool parse_string(PyObject **item, parse_buffer *const input_buffer
 
     /* zero terminate the output */
     *output_pointer = '\0';
-    if (fixed_utf8_len == -1 || fixed_utf8_len == 3) {
+    if (fixed_utf8_len == -1 || fixed_utf8_len == 3)
         *item = PyUnicode_FromString((char *) output);
-        input_buffer->hooks.deallocate(output);
-    } else {
+    else
         *item = PyUnicode_FromKindAndData(fixed_utf8_len, output, output_pointer - output);
-    }
+    input_buffer->hooks.deallocate(output);
 
     input_buffer->offset = (Py_ssize_t) (input_end - input_buffer->content);
     input_buffer->offset++;
