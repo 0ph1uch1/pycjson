@@ -309,6 +309,7 @@ static cJSON_bool parse_string(PyObject **item, parse_buffer *const input_buffer
                     break;
 
                 default:
+                    PyErr_Format(PyExc_ValueError, "Failed to parse string: invalid escape sequence(%d)\nposition: %d", input_pointer[1], input_buffer->offset);
                     goto fail;
             }
             input_pointer += sequence_length;
