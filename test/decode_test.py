@@ -20,6 +20,7 @@ class TestEncode(unittest.TestCase):
             -2.3,
             321321432.231543245,
             -321321432.231543245,
+            "abc",
             math.inf,
             -math.inf,
             # math.nan, # TODO
@@ -37,8 +38,8 @@ class TestEncode(unittest.TestCase):
 
         for case in test_cases:
             re_json = json.loads(case)
-            re_cjson = cjson.loads(case)
             with self.subTest(msg=f'decoding_test(case={case})'):
+                re_cjson = cjson.loads(case)
                 self.assertEqual(re_cjson, re_json)
 
     def _check(self, a, b):

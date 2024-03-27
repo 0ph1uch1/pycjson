@@ -9,6 +9,7 @@
 #define cannot_access_at_index(buffer, index) (!can_access_at_index(buffer, index))
 /* get a pointer to the buffer at the position */
 #define buffer_at_offset(buffer) ((buffer)->content + (buffer)->offset)
+#define STACK_BUFFER_SIZE 512
 
 typedef struct internal_hooks {
     void *(CJSON_CDECL *allocate)(Py_ssize_t size);
@@ -197,6 +198,9 @@ static cJSON_bool parse_string(PyObject **item, parse_buffer *const input_buffer
     const unsigned char *input_end = buffer_at_offset(input_buffer) + 1;
     unsigned char *output_pointer = NULL;
     unsigned char *output = NULL;
+    // by default, it is ASCII string
+    int fixed_utf8_len = 1;
+    unsigned char output_buffer[STACK_BUFFER_SIZE];
 
     /* not a string */
     if (buffer_at_offset(input_buffer)[0] != '\"') {
@@ -228,7 +232,10 @@ static cJSON_bool parse_string(PyObject **item, parse_buffer *const input_buffer
 
         /* This is at most how much we need for the output */
         allocation_length = (Py_ssize_t) (input_end - buffer_at_offset(input_buffer)) - skipped_bytes;
-        output = (unsigned char *) input_buffer->hooks.allocate(allocation_length + sizeof(""));
+        if (allocation_length < STACK_BUFFER_SIZE)
+            output = output_buffer;
+        else
+            output = (unsigned char *) input_buffer->hooks.allocate(allocation_length + sizeof(""));
         if (output == NULL) {
             PyErr_Format(PyExc_MemoryError, "Failed to parse string: allocation failure\nposition: %d", input_buffer->offset);
             goto fail; /* allocation failure */
@@ -240,6 +247,26 @@ static cJSON_bool parse_string(PyObject **item, parse_buffer *const input_buffer
     while (input_pointer < input_end) {
         if (*input_pointer != '\\') {
             *output_pointer++ = *input_pointer++;
+
+            if (fixed_utf8_len != -1) {
+                int len;
+                // determine the length of the UTF-8 sequence by starting with the first byte
+                if (*(output_pointer - 1) < 0x80) {
+                    len = 1;
+                } else if (*(output_pointer - 1) < 0xE0) {
+                    len = 2;
+                } else if (*(output_pointer - 1) < 0xF0) {
+                    len = 3;
+                } else if (*(output_pointer - 1) < 0xF8) {
+                    len = 4;
+                } else {
+                    PyErr_Format(PyExc_ValueError, "Failed to parse string: unrecognized UTF-8 staring with(%d)\nposition: %d", *(output_pointer - 1), input_buffer->offset);
+                    goto fail;
+                }
+                if (fixed_utf8_len != len) {
+                    fixed_utf8_len = -1;
+                }
+            }
         }
         /* escape sequence */
         else {
@@ -282,6 +309,7 @@ static cJSON_bool parse_string(PyObject **item, parse_buffer *const input_buffer
                     break;
 
                 default:
+                    PyErr_Format(PyExc_ValueError, "Failed to parse string: invalid escape sequence(%d)\nposition: %d", input_pointer[1], input_buffer->offset);
                     goto fail;
             }
             input_pointer += sequence_length;
@@ -290,10 +318,13 @@ static cJSON_bool parse_string(PyObject **item, parse_buffer *const input_buffer
 
     /* zero terminate the output */
     *output_pointer = '\0';
+    if (fixed_utf8_len == -1 || fixed_utf8_len == 3)
+        *item = PyUnicode_FromString((char *) output);
+    else
+        *item = PyUnicode_FromKindAndData(fixed_utf8_len, output, output_pointer - output);
 
-    *item = PyUnicode_FromString((char *) output);
-
-    input_buffer->hooks.deallocate(output);
+    if (output != output_buffer)
+        input_buffer->hooks.deallocate(output);
 
     input_buffer->offset = (Py_ssize_t) (input_end - input_buffer->content);
     input_buffer->offset++;
@@ -301,7 +332,7 @@ static cJSON_bool parse_string(PyObject **item, parse_buffer *const input_buffer
     return true;
 
 fail:
-    if (output != NULL) {
+    if (output != NULL && output != output_buffer) {
         input_buffer->hooks.deallocate(output);
     }
 
@@ -379,12 +410,11 @@ fail:
 /* Parse the input text to generate a number, and populate the result into item. */
 static cJSON_bool parse_number(PyObject **item, parse_buffer *const input_buffer) {
     assert(item);
-    double number = 0;
     unsigned char *after_end = NULL;
-    unsigned char old_ending = 0;
+    unsigned char old_ending = '\x0';
     Py_ssize_t i = 0;
     cJSON_bool dec = false;
-    const unsigned char* starting_point = buffer_at_offset(input_buffer);
+    const unsigned char *starting_point = buffer_at_offset(input_buffer);
 
     if ((input_buffer == NULL) || (input_buffer->content == NULL)) {
         PyErr_Format(PyExc_ValueError, "Failed to parse number: no input\nposition: %d", input_buffer->offset);
@@ -419,20 +449,28 @@ static cJSON_bool parse_number(PyObject **item, parse_buffer *const input_buffer
         }
     }
 loop_end:
-    old_ending = buffer_at_offset(input_buffer)[i];
-    *((char*)(buffer_at_offset(input_buffer) + i)) = '\0';
+    // there is already a null terminator at the end of the buffer
+    if (input_buffer->offset + i != input_buffer->length) {
+        if (!can_access_at_index(input_buffer, i) || i == 0) {
+            PyErr_Format(PyExc_ValueError, "Failed to parse number: expected character after number\nposition: %d", input_buffer->offset);
+            return false;
+        }
+        old_ending = buffer_at_offset(input_buffer)[i];
+        *((char *) (buffer_at_offset(input_buffer) + i)) = '\0';
+    }
 
     if (dec)
-        *item = PyFloat_FromDouble(strtod((const char*)starting_point, (char **) &after_end));
+        *item = PyFloat_FromDouble(strtod((const char *) starting_point, (char **) &after_end));
     else
-        *item = PyLong_FromString((const char*)starting_point, (char **) &after_end, 10);
-    if(starting_point == after_end || NULL == *item) {
+        *item = PyLong_FromString((const char *) starting_point, (char **) &after_end, 10);
+    if (starting_point == after_end || NULL == *item) {
         PyErr_Format(PyExc_ValueError, "Failed to parse number: invalid number\nposition: %d", input_buffer->offset);
-        *((char*)(buffer_at_offset(input_buffer) + i)) = old_ending;
+        *((char *) (buffer_at_offset(input_buffer) + i)) = old_ending;
         return false;
     }
 
-    *((char*)(buffer_at_offset(input_buffer) + i)) = old_ending;
+    // restore the old ending, if it was overwritten, otherwise it will set null terminator again
+    *((char *) (buffer_at_offset(input_buffer) + i)) = old_ending;
     input_buffer->offset += (Py_ssize_t) (after_end - starting_point);
     return true;
 }
