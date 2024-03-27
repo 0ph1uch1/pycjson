@@ -563,19 +563,22 @@ static cJSON_bool parse_value(PyObject **item, parse_buffer *const input_buffer)
     /* parse the different types of values */
     /* null */
     if (can_read(input_buffer, 4) && (strncmp((const char *) buffer_at_offset(input_buffer), "null", 4) == 0)) {
-        *item = Py_NewRef(Py_None);
+        Py_INCREF(Py_None);
+        *item = Py_None;
         input_buffer->offset += 4;
         return true;
     }
     /* false */
     if (can_read(input_buffer, 5) && (strncmp((const char *) buffer_at_offset(input_buffer), "false", 5) == 0)) {
-        *item = Py_NewRef(Py_False);
+        Py_INCREF(Py_False);
+        *item = Py_False;
         input_buffer->offset += 5;
         return true;
     }
     /* true */
     if (can_read(input_buffer, 4) && (strncmp((const char *) buffer_at_offset(input_buffer), "true", 4) == 0)) {
-        *item = Py_NewRef(Py_True);
+        Py_INCREF(Py_True);
+        *item = Py_True;
         input_buffer->offset += 4;
         return true;
     }
