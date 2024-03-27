@@ -1,0 +1,21 @@
+on:
+  workflow_dispatch:
+  push:
+
+jobs:
+  run-test:
+    name: "run tests"
+    runs-on: ubuntu-20.04
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+      - name: setup python3
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.8'
+      - name: install dependencies
+        run: |
+          python3 -m pip install -e .
+      - name: run tests
+        id: tests
+        run: for file in ./test/*; do python3 $file; done
