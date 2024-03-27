@@ -15,7 +15,7 @@ class TestBenchmark(unittest.TestCase):
 
         print("test_benchmark_encode start")
 
-        for _file in os.listdir(benchmark_folder):
+        for _file in sorted(os.listdir(benchmark_folder)):
             filename = os.path.join(benchmark_folder, _file)
             with open(filename, "r") as f:
                 data = json.load(f)
@@ -35,7 +35,7 @@ class TestBenchmark(unittest.TestCase):
 
         print("test_benchmark_decode start")
 
-        for _file in os.listdir(benchmark_folder):
+        for _file in sorted(os.listdir(benchmark_folder)):
             filename = os.path.join(benchmark_folder, _file)
             with open(filename, "r") as f:
                 data = f.read()
