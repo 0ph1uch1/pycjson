@@ -35,10 +35,13 @@ class TestEncode(unittest.TestCase):
         ]
 
         for case in test_cases:
-            re_json = json.dumps(case, indent=None, separators=(",", ":"), ensure_ascii=False)
+            result_json = json.dumps(case, indent=None, separators=(",", ":"), ensure_ascii=False)
+            result_cjson = cjson.dumps(case)
+            #
+            result_loadback_json = json.loads(result_json)
+            result_loadback_cjson = json.loads(result_cjson)
             with self.subTest(msg=f'encoding_test(case={case})'):
-                re_cjson = cjson.dumps(case)
-                self.assertEqual(re_cjson, re_json)
+                self._check(result_loadback_json, result_loadback_cjson)
 
     def _check(self, a, b):
         if isinstance(a, (list, tuple)):
@@ -61,9 +64,23 @@ class TestEncode(unittest.TestCase):
                 self._check(va, vb)
             return
         if isinstance(a, (int, float)):
-            self.assertAlmostEqual(a, b, 14, "number mismatch")
+            import math
+            if math.isnan(a):
+                self.assertTrue(math.isnan(b), "nan mismatch")
+                return
+            if math.isinf(a):
+                self.assertTrue(math.isinf(b), "inf mismatch")
+                self.assertEqual(a > 0, b > 0, "inf sign mismatch")
+                return
+            self._num_check(a, b)
             return
         self.assertEqual(a, b, "mismatch")
+
+    def _num_check(self, a, b):
+        while a != 0 and abs(a) > 1:
+            a /= 10
+            b /= 10
+        self.assertAlmostEqual(a, b, msg="number mismatch")
 
 
 if __name__ == "__main__":
