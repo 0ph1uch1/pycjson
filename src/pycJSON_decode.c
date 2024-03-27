@@ -12,7 +12,7 @@
 #define STACK_BUFFER_SIZE 512
 
 typedef struct internal_hooks {
-    void *(CJSON_CDECL *allocate)(Py_ssize_t size);
+    void *(CJSON_CDECL *allocate)(size_t size);
     void(CJSON_CDECL *deallocate)(void *pointer);
 } internal_hooks;
 
