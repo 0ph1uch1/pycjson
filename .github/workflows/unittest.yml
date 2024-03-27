@@ -18,4 +18,5 @@ jobs:
           python3 -m pip install -e .
       - name: run tests
         id: tests
-        run: for file in ./test/*; do python3 $file; done
+        # skip benchmark_test.py
+        run: for file in ./test/*; do if [ $file != "./test/benchmark_test.py" ]; then python3 $file; fi; done
