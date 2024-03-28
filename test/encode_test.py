@@ -14,7 +14,7 @@ class TestEncode(unittest.TestCase):
 
         for case in test_cases:
             with self.subTest(msg=f'encoding_fail_test(case={case})'):
-                with self.assertRaises(Exception):
+                with self.assertRaises(TypeError):
                     cjson.dumps(case)
 
     def test_encode(self):
