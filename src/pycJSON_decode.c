@@ -593,12 +593,12 @@ static cJSON_bool parse_value(PyObject **item, parse_buffer *const input_buffer)
         return true;
     }
     if (can_read(input_buffer, 3) && (strncmp((const char *) buffer_at_offset(input_buffer), "NaN", 3) == 0)) {
-        *item = PyFloat_FromDouble(NAN);
+        *item = PyFloat_FromDouble(Py_NAN);
         input_buffer->offset += 3;
         return true;
     }
     if (can_read(input_buffer, 4) && (strncmp((const char *) buffer_at_offset(input_buffer), "-NaN", 4) == 0)) {
-        *item = PyFloat_FromDouble(NAN);
+        *item = PyFloat_FromDouble(Py_NAN);
         input_buffer->offset += 4;
         return true;
     }

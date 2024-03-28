@@ -355,7 +355,7 @@ static cJSON_bool print_object(PyObject *item, printbuffer *const output_buffer)
     size_t length = 0;
     PyObject *iter = PyObject_GetIter(item);
     if (iter == NULL) {
-        PyErr_SetString(PyExc_TypeError, "TypeError: Object is not iterable");
+        PyErr_SetString(PyExc_TypeError, "Object is not iterable");
         return false;
     }
 

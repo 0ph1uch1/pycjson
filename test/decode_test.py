@@ -3,10 +3,12 @@ import sys
 import unittest
 
 
-class TestEncode(unittest.TestCase):
-    def test_encode(self):
+class TestDecode(unittest.TestCase):
+    def test_decode(self):
         import json
         import math
+        import gc
+        import objgraph
 
         import cjson
 
@@ -23,7 +25,7 @@ class TestEncode(unittest.TestCase):
             "abc",
             math.inf,
             -math.inf,
-            # math.nan, # TODO
+            math.nan, # TODO
             math.pi,
             [], {}, tuple(),
             [1, 2, 3, 4],
@@ -39,33 +41,12 @@ class TestEncode(unittest.TestCase):
         for case in test_cases:
             re_json = json.loads(case)
             with self.subTest(msg=f'decoding_test(case={case})'):
+                gc.collect()
+                objs = [id(a) for a in objgraph.get_leaking_objects()]
                 re_cjson = cjson.loads(case)
+                re = [a for a in list(objgraph.get_leaking_objects()) if id(a) not in objs]
+                self.assertEqual(len(re), 0, f"leak: {re}")
                 self.assertEqual(re_cjson, re_json)
-
-    def _check(self, a, b):
-        if isinstance(a, (list, tuple)):
-            if not isinstance(b, (list, tuple)):
-                self.fail("type mismatch")
-            if len(a) != len(b):
-                self.fail("list/tuple length mismatch")
-            for va, vb in zip(a, b):
-                self._check(va, vb)
-            return
-        if isinstance(a, dict):
-            if not isinstance(b, dict):
-                self.fail("type mismatch")
-            if len(a) != len(b):
-                self.fail("dict length mismatch")
-            for ka, va in a.items():
-                vb = b.get(ka)
-                if vb is None and va is not None:
-                    self.fail("key mismatch")
-                self._check(va, vb)
-            return
-        if isinstance(a, (int, float)):
-            self.assertAlmostEqual(a, b, 14, "number mismatch")
-            return
-        self.assertEqual(a, b, "mismatch")
 
 
 if __name__ == "__main__":

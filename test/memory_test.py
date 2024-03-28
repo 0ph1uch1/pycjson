@@ -3,7 +3,7 @@ Developed by ESN, an Electronic Arts Inc. studio.
 Copyright (c) 2014, Electronic Arts Inc.
 All rights reserved.
 
-Full liscence text can be found in https://github.com/ultrajson/ultrajson.
+Full licence text can be found in https://github.com/ultrajson/ultrajson.
 """
 
 """
