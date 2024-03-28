@@ -317,7 +317,7 @@ static cJSON_bool print_array(PyObject *item, printbuffer *const output_buffer) 
             return false;
         }
         update_offset(output_buffer);
-        Py_DecRef(next_element);
+        Py_DECREF(next_element);
         next_element = PyIter_Next(iter);
         if (next_element) {
             length = (size_t) (output_buffer->format ? 2 : 1);
@@ -334,7 +334,7 @@ static cJSON_bool print_array(PyObject *item, printbuffer *const output_buffer) 
             output_buffer->offset += length;
         }
     }
-    Py_DecRef(iter);
+    Py_DECREF(iter);
     iter = NULL;
 
     output_pointer = ensure(output_buffer, 2);
@@ -417,7 +417,7 @@ static cJSON_bool print_object(PyObject *item, printbuffer *const output_buffer)
         } else if (PyNumber_Check(next_element)) {
             PyObject *str = PyObject_Str(next_element);
             if (!print_string(str, output_buffer)) {
-                Py_DecRef(str);
+                Py_DECREF(str);
                 return false;
             }
             Py_DECREF(str);
@@ -445,7 +445,7 @@ static cJSON_bool print_object(PyObject *item, printbuffer *const output_buffer)
         }
         update_offset(output_buffer);
 
-        Py_DecRef(next_element);
+        Py_DECREF(next_element);
         next_element = PyIter_Next(iter);
 
         /* print comma if not last */
@@ -563,12 +563,12 @@ PyObject *pycJSON_Encode(PyObject *self, PyObject *args, PyObject *kwargs) {
     buffer->hooks = global_hooks;
     if (buffer->buffer == NULL) {
         PyErr_SetString(PyExc_MemoryError, "Failed to allocate memory for buffer");
-        Py_RETURN_NONE;
+        return NULL;
     }
     PyObject *arg = PyTuple_GET_ITEM(args, 0);
     if (!print_value(arg, buffer)) {
         if (!PyErr_Occurred()) PyErr_SetString(PyExc_TypeError, "Failed to encode object");
-        Py_RETURN_NONE;
+        return NULL;
     }
 
     update_offset(buffer);
