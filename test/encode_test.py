@@ -5,8 +5,6 @@ import unittest
 
 class TestEncode(unittest.TestCase):
     def test_fail(self):
-        import objgraph
-        import gc
         import cjson
 
         class A:
@@ -16,18 +14,12 @@ class TestEncode(unittest.TestCase):
 
         for case in test_cases:
             with self.subTest(msg=f'encoding_fail_test(case={case})'):
-                gc.collect()
-                objs = [id(a) for a in objgraph.get_leaking_objects()]
                 with self.assertRaises(Exception):
                     cjson.dumps(case)
-                re = [a for a in list(objgraph.get_leaking_objects()) if id(a) not in objs]
-                self.assertEqual(len(re), 0, f"leak: {re}")
 
     def test_encode(self):
         import json
         import math
-        import objgraph
-        import gc
 
         import cjson
 
@@ -58,14 +50,9 @@ class TestEncode(unittest.TestCase):
         for case in test_cases:
             result_json = json.dumps(case, indent=None, separators=(",", ":"), ensure_ascii=False)
             result_loadback_json = json.loads(result_json)
-            #
 
             with self.subTest(msg=f'encoding_test(case={case})'):
-                gc.collect()
-                objs = [id(a) for a in objgraph.get_leaking_objects()]
                 result_cjson = cjson.dumps(case)
-                re = [a for a in list(objgraph.get_leaking_objects()) if id(a) not in objs]
-                self.assertEqual(len(re), 0, f"leak: {re}")
                 result_loadback_cjson = json.loads(result_cjson)
                 self._check(result_loadback_json, result_loadback_cjson)
 

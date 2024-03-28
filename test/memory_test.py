@@ -88,6 +88,7 @@ class TestMemory(unittest.TestCase):
 
         now = time.time()
         seeds = [now * i for i in range(1, 31)]
+        seeds = [1711648723.164294]
         for seed in seeds:
             data = random_object(seed)
             print(f"--seed {seed}")

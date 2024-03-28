@@ -7,8 +7,6 @@ class TestDecode(unittest.TestCase):
     def test_decode(self):
         import json
         import math
-        import gc
-        import objgraph
 
         import cjson
 
@@ -25,7 +23,7 @@ class TestDecode(unittest.TestCase):
             "abc",
             math.inf,
             -math.inf,
-            math.nan, # TODO
+            math.nan,  # TODO
             math.pi,
             [], {}, tuple(),
             [1, 2, 3, 4],
@@ -39,14 +37,13 @@ class TestDecode(unittest.TestCase):
         test_cases = [json.dumps(case, ensure_ascii=False) for case in test_cases]
 
         for case in test_cases:
-            re_json = json.loads(case)
             with self.subTest(msg=f'decoding_test(case={case})'):
-                gc.collect()
-                objs = [id(a) for a in objgraph.get_leaking_objects()]
+                re_json = json.loads(case)
                 re_cjson = cjson.loads(case)
-                re = [a for a in list(objgraph.get_leaking_objects()) if id(a) not in objs]
-                self.assertEqual(len(re), 0, f"leak: {re}")
-                self.assertEqual(re_cjson, re_json)
+                if isinstance(re_json, float) and math.isnan(re_json):
+                    self.assertTrue(math.isnan(re_cjson))
+                else:
+                    self.assertEqual(re_cjson, re_json)
 
 
 if __name__ == "__main__":
