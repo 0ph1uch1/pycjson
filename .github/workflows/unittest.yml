@@ -19,4 +19,5 @@ jobs:
       - name: run tests
         id: tests
         # skip benchmark_test.py
-        run: for file in ./test/*; do if [ $file != "./test/benchmark_test.py" ]; then python3 $file; fi; done
+        run: |
+          python3 test/all_tests.py --ignore benchmark
