@@ -20,4 +20,4 @@ jobs:
         id: tests
         # skip benchmark_test.py
         run: |
-          python3 test/all_tests.py --ignore benchmark
+          python3 test/all_test.py --ignore benchmark
