@@ -24,8 +24,7 @@ typedef struct printbuffer {
     unsigned char *buffer;
     size_t length;
     size_t offset;
-    size_t depth; /* current nesting depth (for formatted printing) */
-    cJSON_bool noalloc;
+    size_t depth;      /* current nesting depth (for formatted printing) */
     cJSON_bool format; /* is this print a formatted print */
     internal_hooks hooks;
     cJSON_bool using_heap;
@@ -36,18 +35,13 @@ static bool print_value(PyObject *item, printbuffer *const output_buffer);
 
 /* realloc printbuffer if necessary to have at least "needed" bytes more */
 static unsigned char *ensure(printbuffer *const p, size_t needed) {
-    size_t newsize = 0;
+    assert(p && p->buffer);
+    assert(!(p->length > 0 && p->offset >= p->length));
 
-    if ((p == NULL) || (p->buffer == NULL)) {
-        return NULL;
-    }
-
-    if ((p->length > 0) && (p->offset >= p->length)) {
-        /* make sure that offset is valid */
-        return NULL;
-    }
+    size_t newsize;
 
     if (needed > INT_MAX) {
+        PyErr_SetString(PyExc_MemoryError, "Failed to allocate memory for buffer");
         /* sizes bigger than INT_MAX are currently not supported */
         return NULL;
     }
@@ -57,16 +51,13 @@ static unsigned char *ensure(printbuffer *const p, size_t needed) {
         return p->buffer + p->offset;
     }
 
-    if (p->noalloc) {
-        return NULL;
-    }
-
     /* calculate new buffer size */
     if (needed > (INT_MAX / 2)) {
         /* overflow of int, use INT_MAX if possible */
         if (needed <= INT_MAX) {
             newsize = INT_MAX;
         } else {
+            PyErr_SetString(PyExc_MemoryError, "Failed to allocate memory for buffer");
             return NULL;
         }
     } else {
@@ -75,9 +66,6 @@ static unsigned char *ensure(printbuffer *const p, size_t needed) {
 
     /* reallocate with realloc if available */
     p->hooks.reallocate(p, newsize, p->offset + 1);
-    if (p->buffer == NULL) {
-        return NULL;
-    }
 
     return p->buffer + p->offset;
 }
@@ -323,7 +311,6 @@ static cJSON_bool print_array(PyObject *item, printbuffer *const output_buffer) 
             length = (size_t) (output_buffer->format ? 2 : 1);
             output_pointer = ensure(output_buffer, length + 1);
             if (output_pointer == NULL) {
-
                 return false;
             }
             *output_pointer++ = ',';
@@ -339,7 +326,7 @@ static cJSON_bool print_array(PyObject *item, printbuffer *const output_buffer) 
 
     output_pointer = ensure(output_buffer, 2);
     if (output_pointer == NULL) {
-        PyErr_SetString(PyExc_MemoryError, "Failed to allocate memory for buffer");
+        // PyErr_SetString(PyExc_MemoryError, "Failed to allocate memory for buffer");
         return false;
     }
     *output_pointer++ = ']';
@@ -526,25 +513,6 @@ static bool print_value(PyObject *item, printbuffer *const output_buffer) {
         PyErr_SetString(PyExc_TypeError, "TypeError: Object of type is not JSON serializable"); // TODO ?
         return false;
     }
-
-    // No cJSON_Raw?
-    // case cJSON_Raw:
-    // {
-    //     size_t raw_length = 0;
-    //     if (item->valuestring == NULL)
-    //     {
-    //         return false;
-    //     }
-
-    //     raw_length = strlen(item->valuestring) + sizeof("");
-    //     output = ensure(output_buffer, raw_length);
-    //     if (output == NULL)
-    //     {
-    //         return false;
-    //     }
-    //     memcpy(output, item->valuestring, raw_length);
-    //     return true;
-    // }
 }
 
 
@@ -556,16 +524,17 @@ PyObject *pycJSON_Encode(PyObject *self, PyObject *args, PyObject *kwargs) {
 
     unsigned char stack_buffer[CJSON_PRINTBUFFER_MAX_STACK_SIZE];
 
+    static const char *kwlist[] = {"obj", "format", NULL};
+    PyObject *arg;
+    buffer->format = false;
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O|p", (char **) kwlist, &arg, &buffer->format)) {
+        if (!PyErr_Occurred()) PyErr_SetString(PyExc_TypeError, "Failed to parse arguments");
+        return NULL;
+    }
     /* create buffer */
     buffer->buffer = stack_buffer; //(unsigned char *) global_hooks.allocate(default_buffer_size);
     buffer->length = default_buffer_size;
-    buffer->format = kwargs && PyDict_Contains(kwargs, PyUnicode_FromString("format")) && PyObject_IsTrue(PyDict_GetItem(kwargs, PyUnicode_FromString("format")));
     buffer->hooks = global_hooks;
-    if (buffer->buffer == NULL) {
-        PyErr_SetString(PyExc_MemoryError, "Failed to allocate memory for buffer");
-        return NULL;
-    }
-    PyObject *arg = PyTuple_GET_ITEM(args, 0);
     if (!print_value(arg, buffer)) {
         if (!PyErr_Occurred()) PyErr_SetString(PyExc_TypeError, "Failed to encode object");
         return NULL;
