@@ -1,4 +1,5 @@
 #include "pycJSON.h"
+#define PY_SSIZE_T_CLEAN
 #include <Python.h>
 #include <math.h>
 #include <stdbool.h>
@@ -628,29 +629,21 @@ typedef struct {
     const unsigned char *json;
     Py_ssize_t position;
 } error;
-static error global_error = {NULL, 0};
+// static error global_error = {NULL, 0};
 
 PyObject *pycJSON_Decode(PyObject *self, PyObject *args, PyObject *kwargs) {
     parse_buffer buffer = {0, 0, 0, 0, {0, 0}};
     PyObject *item = NULL;
-    cJSON_bool require_null_terminated = 0;
-    const char **return_parse_end = 0;
 
-    /* reset error position */
-    global_error.json = NULL;
-    global_error.position = 0;
-
-    PyObject *arg;
-    if (!PyArg_ParseTuple(args, "U", &arg)) {
-        PyErr_Format(PyExc_ValueError, "Failed to parse JSON: invalid argument, expected string at first argument");
+    const char *value;
+    Py_ssize_t buffer_length;
+    if (!PyArg_ParseTuple(args, "s#", &value, &buffer_length)) {
+        PyErr_Format(PyExc_TypeError, "Failed to parse JSON: invalid argument, expected str / bytes-like object");
         goto fail;
     }
 
-    Py_ssize_t buffer_length;
-    const char *value = PyUnicode_AsUTF8AndSize(arg, &buffer_length);
-    if (value == NULL || 0 == buffer_length) {
-        if (0 == buffer_length)
-            PyErr_SetString(PyExc_ValueError, "Empty string");
+    if (0 == buffer_length) {
+        PyErr_SetString(PyExc_ValueError, "Empty string");
         goto fail;
     }
     buffer.content = (const unsigned char *) value;
@@ -662,37 +655,19 @@ PyObject *pycJSON_Decode(PyObject *self, PyObject *args, PyObject *kwargs) {
         goto fail;
     }
 
-    /* if we require null-terminated JSON without appended garbage, skip and then check for a null terminator */
-    if (require_null_terminated) {
-        buffer_skip_whitespace(&buffer);
-        if ((buffer.offset >= buffer.length) || buffer_at_offset(&buffer)[0] != '\0') {
-            goto fail;
-        }
-    }
-    if (return_parse_end) {
-        *return_parse_end = (const char *) buffer_at_offset(&buffer);
-    }
     return item;
 
 fail:
-
     if (value != NULL && !PyErr_Occurred()) {
-        error local_error;
-        local_error.json = (const unsigned char *) value;
-        local_error.position = 0;
+        Py_ssize_t position = 0;
 
         if (buffer.offset < buffer.length) {
-            local_error.position = buffer.offset;
+            position = buffer.offset;
         } else if (buffer.length > 0) {
-            local_error.position = buffer.length - 1;
+            position = buffer.length - 1;
         }
 
-        if (return_parse_end != NULL) {
-            *return_parse_end = (const char *) local_error.json + local_error.position;
-        }
-
-        global_error = local_error;
-        PyErr_Format(PyExc_ValueError, "Failed to parse JSON (position %d)", global_error.position);
+        PyErr_Format(PyExc_ValueError, "Failed to parse JSON (position %d)", position);
     }
     return NULL;
 }

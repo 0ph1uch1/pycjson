@@ -25,8 +25,6 @@
 #ifndef pycJSON__h
 #define pycJSON__h
 
-#include <Python.h>
-
 #ifdef __cplusplus
 extern "C" {
 #endif
