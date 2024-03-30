@@ -569,6 +569,12 @@ static bool parse_value(PyObject **item, parse_buffer *const input_buffer) {
     }
     /* number */
     if (can_access_at_index(input_buffer, 0) && ((buffer_at_offset(input_buffer)[0] == '-') || ((buffer_at_offset(input_buffer)[0] >= '0') && (buffer_at_offset(input_buffer)[0] <= '9')))) {
+        /* -Infinity */
+        if (can_read(input_buffer, 9) && (strncmp((const char *) buffer_at_offset(input_buffer), "-Infinity", 9) == 0)) {
+            *item = PyFloat_FromDouble(-INFINITY);
+            input_buffer->offset += 9;
+            return true;
+        }
         return parse_number(item, input_buffer);
     }
     /* array */
@@ -604,12 +610,6 @@ static bool parse_value(PyObject **item, parse_buffer *const input_buffer) {
     if (can_read(input_buffer, 8) && (strncmp((const char *) buffer_at_offset(input_buffer), "Infinity", 8) == 0)) {
         *item = PyFloat_FromDouble(INFINITY);
         input_buffer->offset += 8;
-        return true;
-    }
-    /* -Infinity */
-    if (can_read(input_buffer, 9) && (strncmp((const char *) buffer_at_offset(input_buffer), "-Infinity", 9) == 0)) {
-        *item = PyFloat_FromDouble(-INFINITY);
-        input_buffer->offset += 9;
         return true;
     }
     /* NaN */
