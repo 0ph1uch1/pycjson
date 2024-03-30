@@ -32,7 +32,7 @@ import unittest
 
 
 class TestMemory(unittest.TestCase):
-    def test_memory(self):
+    def test_encode_leak(self):
         import gc
         import math
         import random
@@ -135,6 +135,45 @@ class TestMemory(unittest.TestCase):
                 seen.add(id(o))
                 out.append(o)
         return out
+
+    def _get_benchfiles_fullpath(self):
+        benchmark_folder = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "bench"
+        )
+
+        return sorted([os.path.join(benchmark_folder, f) for f in os.listdir(benchmark_folder)])
+
+    def test_decode_leak(self):
+        import tracemalloc
+        import cjson
+        import gc
+
+        datas = []
+        for file in self._get_benchfiles_fullpath():
+            with open(file, "r") as f:
+                datas.append(f.read())
+
+        # warm up. CPython will not release memory immediately.
+        for data in datas:
+            for _ in range(100):
+                cjson.loads(data)
+        #
+        tracemalloc.start()
+        #
+        gc.collect()
+        snapshot_1, peak_1 = tracemalloc.get_traced_memory()
+        for data in datas:
+            for _ in range(1000):
+                cjson.loads(data)
+        gc.collect()
+        snapshot_2, peak_2 = tracemalloc.get_traced_memory()
+        #
+        mem_diff = snapshot_2 - snapshot_1
+        peak_diff = peak_2 - peak_1
+        print(f"mem_diff: {mem_diff}, peak_diff: {peak_diff}")
+        # should not increase more than 100 bytes
+        self.assertGreaterEqual(100, mem_diff)
 
 
 if __name__ == "__main__":
