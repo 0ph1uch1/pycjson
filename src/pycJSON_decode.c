@@ -319,10 +319,7 @@ static bool parse_string(PyObject **item, parse_buffer *const input_buffer) {
 
     /* zero terminate the output */
     *output_pointer = '\0';
-    if (fixed_utf8_len == -1 || fixed_utf8_len == 3)
-        *item = PyUnicode_FromString((char *) output);
-    else
-        *item = PyUnicode_FromKindAndData(fixed_utf8_len, output, output_pointer - output);
+    *item = PyUnicode_FromString((char *) output);
 
     if (output != output_buffer)
         input_buffer->hooks.deallocate(output);
