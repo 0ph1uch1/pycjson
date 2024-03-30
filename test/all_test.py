@@ -44,4 +44,5 @@ if __name__ == "__main__":
     runner = unittest.TextTestRunner()
     #
     sys.path.append(os.path.dirname(cur_path))
-    runner.run(suite)
+    result = runner.run(suite)
+    exit(0 if result.wasSuccessful() else 1)
