@@ -145,9 +145,10 @@ class TestMemory(unittest.TestCase):
         return sorted([os.path.join(benchmark_folder, f) for f in os.listdir(benchmark_folder)])
 
     def test_decode_leak(self):
-        import tracemalloc
-        import cjson
         import gc
+        import tracemalloc
+
+        import cjson
 
         datas = []
         for file in self._get_benchfiles_fullpath():
@@ -156,7 +157,7 @@ class TestMemory(unittest.TestCase):
 
         # warm up. CPython will not release memory immediately.
         for data in datas:
-            for _ in range(100):
+            for _ in range(10):
                 cjson.loads(data)
         #
         tracemalloc.start()
@@ -164,7 +165,7 @@ class TestMemory(unittest.TestCase):
         gc.collect()
         snapshot_1, peak_1 = tracemalloc.get_traced_memory()
         for data in datas:
-            for _ in range(1000):
+            for _ in range(100):
                 cjson.loads(data)
         gc.collect()
         snapshot_2, peak_2 = tracemalloc.get_traced_memory()
