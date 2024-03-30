@@ -563,6 +563,22 @@ static bool parse_value(PyObject **item, parse_buffer *const input_buffer) {
     }
 
     /* parse the different types of values */
+    /* string */
+    if (can_access_at_index(input_buffer, 0) && (buffer_at_offset(input_buffer)[0] == '\"')) {
+        return parse_string(item, input_buffer);
+    }
+    /* number */
+    if (can_access_at_index(input_buffer, 0) && ((buffer_at_offset(input_buffer)[0] == '-') || ((buffer_at_offset(input_buffer)[0] >= '0') && (buffer_at_offset(input_buffer)[0] <= '9')))) {
+        return parse_number(item, input_buffer);
+    }
+    /* array */
+    if (can_access_at_index(input_buffer, 0) && (buffer_at_offset(input_buffer)[0] == '[')) {
+        return parse_array(item, input_buffer);
+    }
+    /* object */
+    if (can_access_at_index(input_buffer, 0) && (buffer_at_offset(input_buffer)[0] == '{')) {
+        return parse_object(item, input_buffer);
+    }
     /* null */
     if (can_read(input_buffer, 4) && (strncmp((const char *) buffer_at_offset(input_buffer), "null", 4) == 0)) {
         Py_INCREF(Py_None);
@@ -584,53 +600,35 @@ static bool parse_value(PyObject **item, parse_buffer *const input_buffer) {
         input_buffer->offset += 4;
         return true;
     }
+    /* Infinity */
     if (can_read(input_buffer, 8) && (strncmp((const char *) buffer_at_offset(input_buffer), "Infinity", 8) == 0)) {
         *item = PyFloat_FromDouble(INFINITY);
         input_buffer->offset += 8;
         return true;
     }
+    /* -Infinity */
     if (can_read(input_buffer, 9) && (strncmp((const char *) buffer_at_offset(input_buffer), "-Infinity", 9) == 0)) {
         *item = PyFloat_FromDouble(-INFINITY);
         input_buffer->offset += 9;
         return true;
     }
+    /* NaN */
     if (can_read(input_buffer, 3) && (strncmp((const char *) buffer_at_offset(input_buffer), "NaN", 3) == 0)) {
         *item = PyFloat_FromDouble(Py_NAN);
         input_buffer->offset += 3;
         return true;
     }
+    /* -NaN */
     if (can_read(input_buffer, 4) && (strncmp((const char *) buffer_at_offset(input_buffer), "-NaN", 4) == 0)) {
         *item = PyFloat_FromDouble(Py_NAN);
         input_buffer->offset += 4;
         return true;
-    }
-    /* string */
-    if (can_access_at_index(input_buffer, 0) && (buffer_at_offset(input_buffer)[0] == '\"')) {
-        return parse_string(item, input_buffer);
-    }
-    /* number */
-    if (can_access_at_index(input_buffer, 0) && ((buffer_at_offset(input_buffer)[0] == '-') || ((buffer_at_offset(input_buffer)[0] >= '0') && (buffer_at_offset(input_buffer)[0] <= '9')))) {
-        return parse_number(item, input_buffer);
-    }
-    /* array */
-    if (can_access_at_index(input_buffer, 0) && (buffer_at_offset(input_buffer)[0] == '[')) {
-        return parse_array(item, input_buffer);
-    }
-    /* object */
-    if (can_access_at_index(input_buffer, 0) && (buffer_at_offset(input_buffer)[0] == '{')) {
-        return parse_object(item, input_buffer);
     }
 
     PyErr_Format(PyExc_ValueError, "Failed to parse value: invalid value\nposition: %d", input_buffer->offset);
 
     return false;
 }
-
-typedef struct {
-    const unsigned char *json;
-    Py_ssize_t position;
-} error;
-// static error global_error = {NULL, 0};
 
 PyObject *pycJSON_Decode(PyObject *self, PyObject *args, PyObject *kwargs) {
     parse_buffer buffer = {0, 0, 0, 0, {0, 0}};
