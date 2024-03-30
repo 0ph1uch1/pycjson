@@ -4,57 +4,13 @@ import unittest
 
 
 class TestEncode(unittest.TestCase):
-    def test_fail(self):
-        import cjson
+    def _get_benchfiles_fullpath(self):
+        benchmark_folder = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "bench"
+        )
 
-        class A:
-            pass
-
-        test_cases = [A()]
-
-        for case in test_cases:
-            with self.subTest(msg=f'encoding_fail_test(case={case})'):
-                with self.assertRaises(TypeError):
-                    cjson.dumps(case)
-
-    def test_encode(self):
-        import json
-        import math
-
-        import cjson
-
-        test_cases = [
-            [1, 2, 3, 4],  # simple list
-            [1, 2.3, "a", None, True, False, [], {}],  # list
-            ("a", 1, 2.3, 2.3, None, True, False, [], {}),  # tuple
-            tuple(range(100)),  # large tuple
-            "a",  # simple string
-            1,  # simple int
-            2.3,  # simple float
-            math.inf, math.nan, math.pi,
-            None,
-            True,
-            False,
-            [],
-            {},
-            dict({a: b for a in range(10) for b in range(10)}),  # set
-            {"啊啊啊": "ß"},
-            321321432.231543245,  # large float # TODO assert fail in decimal part length
-            -321321432.231543245,
-            -1,
-            -2.3,
-            -math.inf,
-            -math.nan,
-        ]
-
-        for case in test_cases:
-            result_json = json.dumps(case, indent=None, separators=(",", ":"), ensure_ascii=False)
-            result_loadback_json = json.loads(result_json)
-
-            with self.subTest(msg=f'encoding_test(case={case})'):
-                result_cjson = cjson.dumps(case)
-                result_loadback_cjson = json.loads(result_cjson)
-                self._check(result_loadback_json, result_loadback_cjson)
+        return sorted([os.path.join(benchmark_folder, f) for f in os.listdir(benchmark_folder)])
 
     def _check(self, a, b):
         if isinstance(a, (list, tuple)):
@@ -94,6 +50,76 @@ class TestEncode(unittest.TestCase):
             a /= 10
             b /= 10
         self.assertAlmostEqual(a, b, msg="number mismatch")
+
+    def test_fail(self):
+        import cjson
+
+        class A:
+            pass
+
+        # TypeError
+        test_cases = [A()]
+
+        for case in test_cases:
+            with self.subTest(msg=f'encoding_fail_test(case={case})'):
+                with self.assertRaises(TypeError):
+                    cjson.dumps(case)
+
+        # TODO uncomment this later
+        # # MemoryError
+        # test_cases = [
+        #     [1] * 2147483648
+        # ]
+
+        # for case in test_cases:
+        #     with self.subTest(msg=f'encoding_fail_test(case={case})'):
+        #         with self.assertRaises(MemoryError):
+        #             cjson.dumps(case)
+
+    def test_encode(self):
+        import collections
+        import json
+        import math
+
+        import cjson
+
+        test_cases = [
+            [1, 2, 3, 4],  # simple list
+            [1, 2.3, "a", None, True, False, [], {}],  # list
+            ("a", 1, 2.3, 2.3, None, True, False, [], {}),  # tuple
+            tuple(range(100)),  # large tuple
+            "a",  # simple string
+            1,  # simple int
+            2.3,  # simple float
+            math.inf, math.nan, math.pi,
+            None,
+            True,
+            False,
+            [],
+            {},
+            dict({a: b for a in range(10) for b in range(10)}),  # set
+            {"啊啊啊": "ß"},
+            321321432.231543245,  # large float # TODO assert fail in decimal part length
+            -321321432.231543245,
+            -1,
+            -2.3,
+            -math.inf,
+            -math.nan,
+            collections.defaultdict(x=1)
+        ]
+
+        for file in self._get_benchfiles_fullpath():
+            with open(file, "r") as f:
+                test_cases.append(json.load(f))
+
+        for case in test_cases:
+            result_json = json.dumps(case, indent=None, separators=(",", ":"), ensure_ascii=False)
+            result_loadback_json = json.loads(result_json)
+
+            with self.subTest(msg=f'encoding_test(case={case})'):
+                result_cjson = cjson.dumps(case)
+                result_loadback_cjson = json.loads(result_cjson)
+                self._check(result_loadback_json, result_loadback_cjson)
 
 
 if __name__ == "__main__":
