@@ -533,6 +533,7 @@ static cJSON_bool parse_object(PyObject **item, parse_buffer *const input_buffer
         buffer_skip_whitespace(input_buffer);
         PyDict_SetItem(*item, keyBuffer, valueBuffer);
         Py_DECREF(valueBuffer);
+        Py_DECREF(keyBuffer);
     } while (can_access_at_index(input_buffer, 0) && (buffer_at_offset(input_buffer)[0] == ','));
 
     if (cannot_access_at_index(input_buffer, 0) || (buffer_at_offset(input_buffer)[0] != '}')) {
