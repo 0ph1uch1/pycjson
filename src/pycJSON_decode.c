@@ -628,6 +628,10 @@ PyObject *pycJSON_Decode(PyObject *self, PyObject *args, PyObject *kwargs) {
         /* parse failure. ep is set. */
         goto fail;
     }
+    if(buffer.offset < buffer.length) {
+        PyErr_Format(PyExc_ValueError, "Failed to parse JSON: extra characters at the end\nend position: %d", buffer.offset);
+        goto fail;
+    }
 
     return item;
 
