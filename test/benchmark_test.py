@@ -29,7 +29,7 @@ class TestBenchmark(unittest.TestCase):
 
         for filename in bench_files:
             base_name = os.path.basename(filename)
-            with open(filename, "r") as f:
+            with open(filename, "r", encoding='utf-8') as f:
                 data = json.load(f)
             time_std = self.time_benchmark(1000, json.dumps, data, indent=None, ensure_ascii=False)
             print(f"test encode, file: {base_name}, time_std: {time_std}")
@@ -45,7 +45,7 @@ class TestBenchmark(unittest.TestCase):
 
         for filename in bench_files:
             base_name = os.path.basename(filename)
-            with open(filename, "r") as f:
+            with open(filename, "r", encoding='utf-8') as f:
                 data = f.read()
             time_std = self.time_benchmark(1000, json.loads, data)
             print(f"test decode, file: {base_name}, time_std: {time_std}")

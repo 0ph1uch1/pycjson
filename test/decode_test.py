@@ -87,7 +87,7 @@ class TestDecode(unittest.TestCase):
 
         test_cases = [json.dumps(case, ensure_ascii=False) for case in test_cases_origin]
         for bench_file in bench_files:
-            with open(bench_file, "r") as f:
+            with open(bench_file, "r", encoding='utf-8') as f:
                 test_cases.append(f.read())
 
         for case in test_cases:

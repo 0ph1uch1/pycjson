@@ -152,7 +152,7 @@ class TestMemory(unittest.TestCase):
 
         datas = []
         for file in self._get_benchfiles_fullpath():
-            with open(file, "r") as f:
+            with open(file, "r", encoding='utf-8') as f:
                 datas.append(f.read())
 
         # warm up. CPython will not release memory immediately.

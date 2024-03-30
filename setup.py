@@ -29,7 +29,7 @@ module1 = Extension(
     extra_link_args=["-lstdc++", "-lm"] + strip_flags,
 )
 
-with open("src/version_template.h") as f:
+with open("src/version_template.h", encoding='utf-8') as f:
     version_template = f.read()
 
 

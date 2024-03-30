@@ -109,7 +109,7 @@ class TestEncode(unittest.TestCase):
         ]
 
         for file in self._get_benchfiles_fullpath():
-            with open(file, "r") as f:
+            with open(file, "r", encoding='utf-8') as f:
                 test_cases.append(json.load(f))
 
         for case in test_cases:
