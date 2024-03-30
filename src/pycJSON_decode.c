@@ -199,8 +199,6 @@ static bool parse_string(PyObject **item, parse_buffer *const input_buffer) {
     const unsigned char *input_end = buffer_at_offset(input_buffer) + 1;
     unsigned char *output_pointer = NULL;
     unsigned char *output = NULL;
-    // by default, it is ASCII string
-    int fixed_utf8_len = 1;
     unsigned char output_buffer[STACK_BUFFER_SIZE];
 
     /* not a string */
@@ -248,26 +246,6 @@ static bool parse_string(PyObject **item, parse_buffer *const input_buffer) {
     while (input_pointer < input_end) {
         if (*input_pointer != '\\') {
             *output_pointer++ = *input_pointer++;
-
-            if (fixed_utf8_len != -1) {
-                int len;
-                // determine the length of the UTF-8 sequence by starting with the first byte
-                if (*(output_pointer - 1) < 0x80) {
-                    len = 1;
-                } else if (*(output_pointer - 1) < 0xE0) {
-                    len = 2;
-                } else if (*(output_pointer - 1) < 0xF0) {
-                    len = 3;
-                } else if (*(output_pointer - 1) < 0xF8) {
-                    len = 4;
-                } else {
-                    PyErr_Format(PyExc_ValueError, "Failed to parse string: unrecognized UTF-8 staring with(%d)\nposition: %d", *(output_pointer - 1), input_buffer->offset);
-                    goto fail;
-                }
-                if (fixed_utf8_len != len) {
-                    fixed_utf8_len = -1;
-                }
-            }
         }
         /* escape sequence */
         else {
