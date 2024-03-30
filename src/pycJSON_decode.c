@@ -28,7 +28,7 @@ typedef struct
     internal_hooks hooks;
 } parse_buffer;
 
-static cJSON_bool parse_value(PyObject **item, parse_buffer *const input_buffer);
+static bool parse_value(PyObject **item, parse_buffer *const input_buffer);
 
 /* parse 4 digit hexadecimal number */
 static unsigned parse_hex4(const unsigned char *const input) {
@@ -193,7 +193,7 @@ static parse_buffer *skip_utf8_bom(parse_buffer *const buffer) {
 }
 
 /* Parse the input text into an unescaped cinput, and populate item. */
-static cJSON_bool parse_string(PyObject **item, parse_buffer *const input_buffer) {
+static bool parse_string(PyObject **item, parse_buffer *const input_buffer) {
     assert(item);
     const unsigned char *input_pointer = buffer_at_offset(input_buffer) + 1;
     const unsigned char *input_end = buffer_at_offset(input_buffer) + 1;
@@ -345,7 +345,7 @@ fail:
 }
 
 /* Build an array from input text. */
-static cJSON_bool parse_array(PyObject **item, parse_buffer *const input_buffer) {
+static bool parse_array(PyObject **item, parse_buffer *const input_buffer) {
     assert(item);
     if (input_buffer->depth >= CJSON_NESTING_LIMIT) {
         PyErr_Format(PyExc_ValueError, "Failed to parse array: too deeply nested\nposition: %d", input_buffer->offset);
@@ -409,12 +409,12 @@ fail:
 }
 
 /* Parse the input text to generate a number, and populate the result into item. */
-static cJSON_bool parse_number(PyObject **item, parse_buffer *const input_buffer) {
+static bool parse_number(PyObject **item, parse_buffer *const input_buffer) {
     assert(item);
     unsigned char *after_end = NULL;
     unsigned char old_ending = '\x0';
     Py_ssize_t i = 0;
-    cJSON_bool dec = false;
+    bool dec = false;
     const unsigned char *starting_point = buffer_at_offset(input_buffer);
 
     if ((input_buffer == NULL) || (input_buffer->content == NULL)) {
@@ -477,7 +477,7 @@ loop_end:
 }
 
 /* Build an object from the text. */
-static cJSON_bool parse_object(PyObject **item, parse_buffer *const input_buffer) {
+static bool parse_object(PyObject **item, parse_buffer *const input_buffer) {
     assert(item);
     if (input_buffer->depth >= CJSON_NESTING_LIMIT) {
         PyErr_Format(PyExc_ValueError, "Failed to parse dictionary: too deeply nested\nposition: %d", input_buffer->offset);
@@ -555,7 +555,7 @@ fail:
 }
 
 /* Parser core - when encountering text, process appropriately. */
-static cJSON_bool parse_value(PyObject **item, parse_buffer *const input_buffer) {
+static bool parse_value(PyObject **item, parse_buffer *const input_buffer) {
     assert(item);
     if ((input_buffer == NULL) || (input_buffer->content == NULL)) {
         PyErr_Format(PyExc_ValueError, "Failed to parse value: no input\nposition: %d", input_buffer->offset);

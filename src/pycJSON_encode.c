@@ -24,10 +24,10 @@ typedef struct printbuffer {
     unsigned char *buffer;
     size_t length;
     size_t offset;
-    size_t depth;      /* current nesting depth (for formatted printing) */
-    cJSON_bool format; /* is this print a formatted print */
+    size_t depth; /* current nesting depth (for formatted printing) */
     internal_hooks hooks;
-    cJSON_bool using_heap;
+    bool format; /* is this print a formatted print */
+    bool using_heap;
 } printbuffer;
 
 // forward declaration
@@ -92,7 +92,7 @@ static unsigned char get_decimal_point(void) {
 }
 
 /* Render the number nicely from the given item into a string. */
-static cJSON_bool print_number(PyObject *item, printbuffer *const output_buffer) {
+static bool print_number(PyObject *item, printbuffer *const output_buffer) {
     unsigned char *output_pointer = NULL;
 
     int length = 0;
@@ -242,12 +242,6 @@ static bool print_string_ptr(const unsigned char *input, printbuffer *const outp
                 case '\"':
                     *output_pointer = '\"';
                     break;
-                case '\b':
-                    *output_pointer = 'b';
-                    break;
-                case '\f':
-                    *output_pointer = 'f';
-                    break;
                 case '\n':
                     *output_pointer = 'n';
                     break;
@@ -256,6 +250,12 @@ static bool print_string_ptr(const unsigned char *input, printbuffer *const outp
                     break;
                 case '\t':
                     *output_pointer = 't';
+                    break;
+                case '\b':
+                    *output_pointer = 'b';
+                    break;
+                case '\f':
+                    *output_pointer = 'f';
                     break;
                 default:
                     /* escape and print as unicode codepoint */
@@ -271,12 +271,12 @@ static bool print_string_ptr(const unsigned char *input, printbuffer *const outp
     return true;
 }
 
-static cJSON_bool print_string(PyObject *item, printbuffer *const buffer) {
+static bool print_string(PyObject *item, printbuffer *const buffer) {
     return print_string_ptr((const unsigned char *) PyUnicode_AsUTF8(item), buffer);
 }
 
 /* Render an array to text */
-static cJSON_bool print_array(PyObject *item, printbuffer *const output_buffer) {
+static bool print_array(PyObject *item, printbuffer *const output_buffer) {
     unsigned char *output_pointer = NULL;
     size_t length = 0;
     PyObject *iter = PyObject_GetIter(item);
@@ -337,7 +337,7 @@ static cJSON_bool print_array(PyObject *item, printbuffer *const output_buffer) 
 }
 
 /* Render an object to text. */
-static cJSON_bool print_object(PyObject *item, printbuffer *const output_buffer) {
+static bool print_object(PyObject *item, printbuffer *const output_buffer) {
     unsigned char *output_pointer = NULL;
     size_t length = 0;
     PyObject *iter = PyObject_GetIter(item);
