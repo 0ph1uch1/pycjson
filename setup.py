@@ -1,9 +1,13 @@
 import os
+import platform
 
 from setuptools import Extension, setup
 
 
-strip_flags = ["-Wl,--strip-all"]
+if platform.system() == "Linux":
+    strip_flags = ["-Wl,--strip-all"]
+else:
+    strip_flags = []
 
 
 def find_src():

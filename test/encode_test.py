@@ -4,52 +4,9 @@ import unittest
 
 
 class TestEncode(unittest.TestCase):
-    def _get_benchfiles_fullpath(self):
-        benchmark_folder = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-            "bench"
-        )
-
-        return sorted([os.path.join(benchmark_folder, f) for f in os.listdir(benchmark_folder)])
-
-    def _check(self, a, b):
-        if isinstance(a, (list, tuple)):
-            if not isinstance(b, (list, tuple)):
-                self.fail("type mismatch")
-            if len(a) != len(b):
-                self.fail("list/tuple length mismatch")
-            for va, vb in zip(a, b):
-                self._check(va, vb)
-            return
-        if isinstance(a, dict):
-            if not isinstance(b, dict):
-                self.fail("type mismatch")
-            if len(a) != len(b):
-                self.fail("dict length mismatch")
-            for ka, va in a.items():
-                vb = b.get(ka)
-                if vb is None and va is not None:
-                    self.fail("key mismatch")
-                self._check(va, vb)
-            return
-        if isinstance(a, (int, float)):
-            import math
-            if math.isnan(a):
-                self.assertTrue(math.isnan(b), "nan mismatch")
-                return
-            if math.isinf(a):
-                self.assertTrue(math.isinf(b), "inf mismatch")
-                self.assertEqual(a > 0, b > 0, "inf sign mismatch")
-                return
-            self._num_check(a, b)
-            return
-        self.assertEqual(a, b, "mismatch")
-
-    def _num_check(self, a, b):
-        while a != 0 and abs(a) > 1:
-            a /= 10
-            b /= 10
-        self.assertAlmostEqual(a, b, msg="number mismatch")
+    def _check_obj_same(self, a, b):
+        from test_utils import check_obj_same
+        return check_obj_same(self, a, b)
 
     def test_fail(self):
         import cjson
@@ -81,8 +38,9 @@ class TestEncode(unittest.TestCase):
         import json
         import math
 
-        import cjson
+        from test_utils import get_benchfiles_fullpath
 
+        import cjson
         test_cases = [
             [1, 2, 3, 4],  # simple list
             [1, 2.3, "a", None, True, False, [], {}],  # list
@@ -108,7 +66,7 @@ class TestEncode(unittest.TestCase):
             collections.defaultdict(x=1)
         ]
 
-        for file in self._get_benchfiles_fullpath():
+        for file in get_benchfiles_fullpath():
             with open(file, "r", encoding='utf-8') as f:
                 test_cases.append(json.load(f))
 
@@ -119,7 +77,7 @@ class TestEncode(unittest.TestCase):
             with self.subTest(msg=f'encoding_test(case={case})'):
                 result_cjson = cjson.dumps(case)
                 result_loadback_cjson = json.loads(result_cjson)
-                self._check(result_loadback_json, result_loadback_cjson)
+                self._check_obj_same(result_loadback_json, result_loadback_cjson)
 
 
 if __name__ == "__main__":

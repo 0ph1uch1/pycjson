@@ -1,38 +1,59 @@
-"""
-Developed by ESN, an Electronic Arts Inc. studio.
-Copyright (c) 2014, Electronic Arts Inc.
-All rights reserved.
-
-Full licence text can be found in https://github.com/ultrajson/ultrajson.
-"""
-
-"""
-A brute force fuzzer for detecting memory issues in ujson.dumps(). To use, first
-compile ujson in debug mode:
-
-    CFLAGS='-DDEBUG' python setup.py -q build_ext --inplace -f
-
-Then run without arguments:
-
-    python tests/fuzz.py
-
-If it crashes, the last line of output is the arguments to reproduce the
-failure.
-
-    python tests/fuzz.py {{ last line of output before crash }}
-
-Adding --dump-python or --dump-json will print the object it intends to
-serialise as either a Python literal or in JSON.
-
-"""
-
 import os
 import sys
 import unittest
 
 
 class TestMemory(unittest.TestCase):
+    @staticmethod
+    def collect_all_objects(obj):
+        """Given an object, return a list of all objects referenced by it."""
+        def _inner(o):
+            yield o
+            if isinstance(o, list):
+                for v in o:
+                    yield from _inner(v)
+            elif isinstance(o, dict):
+                for k, v in o.items():
+                    yield from _inner(k)
+                    yield from _inner(v)
+
+        out = []
+        seen = set()
+        for o in _inner(obj):
+            if id(o) not in seen:
+                seen.add(id(o))
+                out.append(o)
+        return out
+
     def test_encode_leak(self):
+        """
+        Developed by ESN, an Electronic Arts Inc. studio.
+        Copyright (c) 2014, Electronic Arts Inc.
+        All rights reserved.
+
+        Full licence text can be found in https://github.com/ultrajson/ultrajson.
+        """
+        # A brute force fuzzer for detecting memory issues in ujson.dumps(). To use, first
+        # compile ujson in debug mode:
+
+        #     CFLAGS='-DDEBUG' python setup.py -q build_ext --inplace -f
+
+        # Then run without arguments:
+
+        #     python tests/fuzz.py
+
+        # If it crashes, the last line of output is the arguments to reproduce the
+        # failure.
+
+        #     python tests/fuzz.py {{ last line of output before crash }}
+
+        # Adding --dump-python or --dump-json will print the object it intends to
+        # serialise as either a Python literal or in JSON.
+        if hasattr(sys, "pypy_version_info"):
+            # PyPy's GC works differently (no ref counting), so this wouldn't be useful.
+            # Simply returning an empty list effectively disables the refcount test.
+            return []
+
         import gc
         import math
         import random
@@ -109,49 +130,20 @@ class TestMemory(unittest.TestCase):
                         print(f"Ref count of {o!r} went from {before} to {after}")
                 self.assertTrue(False, "Ref count changed")
 
-    @staticmethod
-    def collect_all_objects(obj):
-        """Given an object, return a list of all objects referenced by it."""
-
-        if hasattr(sys, "pypy_version_info"):
-            # PyPy's GC works differently (no ref counting), so this wouldn't be useful.
-            # Simply returning an empty list effectively disables the refcount test.
-            return []
-
-        def _inner(o):
-            yield o
-            if isinstance(o, list):
-                for v in o:
-                    yield from _inner(v)
-            elif isinstance(o, dict):
-                for k, v in o.items():
-                    yield from _inner(k)
-                    yield from _inner(v)
-
-        out = []
-        seen = set()
-        for o in _inner(obj):
-            if id(o) not in seen:
-                seen.add(id(o))
-                out.append(o)
-        return out
-
-    def _get_benchfiles_fullpath(self):
-        benchmark_folder = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-            "bench"
-        )
-
-        return sorted([os.path.join(benchmark_folder, f) for f in os.listdir(benchmark_folder)])
-
     def test_decode_leak(self):
+        if hasattr(sys, "pypy_version_info"):
+            # skip PyPy
+            return
+
         import gc
         import tracemalloc
+
+        from test_utils import get_benchfiles_fullpath
 
         import cjson
 
         datas = []
-        for file in self._get_benchfiles_fullpath():
+        for file in get_benchfiles_fullpath():
             with open(file, "r", encoding='utf-8') as f:
                 datas.append(f.read())
 

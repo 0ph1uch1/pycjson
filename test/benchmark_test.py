@@ -4,14 +4,6 @@ import unittest
 
 
 class TestBenchmark(unittest.TestCase):
-    def _get_benchfiles_fullpath(self):
-        benchmark_folder = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-            "bench"
-        )
-
-        return sorted([os.path.join(benchmark_folder, f) for f in os.listdir(benchmark_folder)])
-
     def time_benchmark(self, repeat_time, func, *args, **kwargs):
         import time
         time_0 = time.time()
@@ -23,9 +15,11 @@ class TestBenchmark(unittest.TestCase):
     def test_benchmark_encode(self):
         import json
 
+        from test_utils import get_benchfiles_fullpath
+
         import cjson
 
-        bench_files = self._get_benchfiles_fullpath()
+        bench_files = get_benchfiles_fullpath()
 
         for filename in bench_files:
             base_name = os.path.basename(filename)
@@ -39,9 +33,11 @@ class TestBenchmark(unittest.TestCase):
     def test_benchmark_decode(self):
         import json
 
+        from test_utils import get_benchfiles_fullpath
+
         import cjson
 
-        bench_files = self._get_benchfiles_fullpath()
+        bench_files = get_benchfiles_fullpath()
 
         for filename in bench_files:
             base_name = os.path.basename(filename)
