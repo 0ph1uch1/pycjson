@@ -51,6 +51,15 @@ class TestDecode(unittest.TestCase):
             b /= 10
         self.assertAlmostEqual(a, b, msg="number mismatch")
 
+    def test_fail(self):
+        import cjson
+
+        test_cases = ["0xf"]
+        for case in test_cases:
+            with self.subTest(msg=f'decoding_fail_test(case={case})'):
+                with self.assertRaises(ValueError):
+                    cjson.loads(case)
+
     def test_decode(self):
         import collections
         import json
@@ -71,7 +80,7 @@ class TestDecode(unittest.TestCase):
             "abc",
             math.inf,
             -math.inf,
-            math.nan,  # TODO
+            math.nan,
             math.pi,
             [], {}, tuple(),
             [1, 2, 3, 4],
@@ -93,10 +102,7 @@ class TestDecode(unittest.TestCase):
         for case in test_cases:
             with self.subTest(msg=f'decoding_test(case={case})'):
                 re_json = json.loads(case)
-                try:
-                    re_cjson = cjson.loads(case)
-                except Exception:
-                    pass
+                re_cjson = cjson.loads(case)
                 self._check(re_cjson, re_json)
 
 

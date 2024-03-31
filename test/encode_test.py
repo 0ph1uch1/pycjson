@@ -99,7 +99,7 @@ class TestEncode(unittest.TestCase):
             {},
             dict({a: b for a in range(10) for b in range(10)}),  # set
             {"啊啊啊": "ß"},
-            321321432.231543245,  # large float # TODO assert fail in decimal part length
+            321321432.231543245,  # large float
             -321321432.231543245,
             -1,
             -2.3,
