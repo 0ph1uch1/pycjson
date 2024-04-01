@@ -49,6 +49,22 @@ class TestEncode(unittest.TestCase):
                 self.assertRaises(ValueError, cjson.dumps, case, allow_nan=False)
                 self.assertRaises(ValueError, json.dumps, case, allow_nan=False)
 
+    def test_seperators(self):
+        import cjson
+        import json
+
+        test_cases = [
+            {"a": 1, "b": 2},
+            [2, 5, 7],
+            "a"
+        ]
+
+        for case in test_cases:
+            with self.subTest(msg=f'encoding_separators_test(case={case})'):
+                result_json = json.dumps(case, separators=(",-,-,", ":_:_:"))
+                result_cjson = cjson.dumps(case, separators=(",-,-,", ":_:_:"))
+                self._check_obj_same(result_json, result_cjson)
+
     def test_skipkeys(self):
         import cjson
         import json

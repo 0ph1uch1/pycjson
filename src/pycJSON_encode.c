@@ -32,6 +32,8 @@ typedef struct printbuffer {
     bool format; /* is this print a formatted print */
     bool skipkeys;
     bool allow_nan;
+    const char *item_separator;
+    const char *key_separator;
 } printbuffer;
 
 // forward declaration
@@ -287,6 +289,14 @@ static bool print_string(PyObject *item, printbuffer *const buffer) {
     return print_string_ptr((const unsigned char *) PyUnicode_AsUTF8(item), buffer);
 }
 
+#define insert_seperator(sep, len)                                                  \
+    output_pointer = ensure(output_buffer, len);                                    \
+    if (output_pointer == NULL) {                                                   \
+        PyErr_SetString(PyExc_MemoryError, "Failed to allocate memory for buffer"); \
+        return false;                                                               \
+    }                                                                               \
+    for (int i = 0; i < strlen(sep); i++) *output_pointer++ = sep[i];
+
 /* Render an array to text */
 static bool print_array(PyObject *item, printbuffer *const output_buffer) {
     unsigned char *output_pointer = NULL;
@@ -320,13 +330,8 @@ static bool print_array(PyObject *item, printbuffer *const output_buffer) {
         Py_DECREF(next_element);
         next_element = PyIter_Next(iter);
         if (next_element) {
-            length = (size_t) (output_buffer->format ? 2 : 1);
-            output_pointer = ensure(output_buffer, length + 1);
-            if (output_pointer == NULL) {
-                return false;
-            }
-            *output_pointer++ = ',';
-            if (output_buffer->format) {
+            length = (size_t) (output_buffer->format ? 1 : 0) + strlen(output_buffer->item_separator);
+            insert_seperator(output_buffer->item_separator, length) if (output_buffer->format) {
                 *output_pointer++ = ' ';
             }
             *output_pointer = '\0';
@@ -424,9 +429,21 @@ static bool print_object(PyObject *item, printbuffer *const output_buffer) {
             if (output_buffer->skipkeys) {
                 Py_DECREF(next_element);
                 next_element = PyIter_Next(iter);
-                if (next_element == NULL && *(output_buffer->buffer + output_buffer->offset - 1) == ',') {
-                    output_buffer->offset--;
+
+                if (next_element == NULL) {
+                    if (PyErr_Occurred()) return false;
+                    if (output_buffer->offset > strlen(output_buffer->item_separator)) {
+                        bool is_last_sep = 1;
+                        for (int i = 0; i < strlen(output_buffer->item_separator); i++) {
+                            if (output_buffer->item_separator[i] != (output_buffer->buffer + output_buffer->offset - strlen(output_buffer->item_separator))[i]) {
+                                is_last_sep = 0;
+                                break;
+                            }
+                        }
+                        if (is_last_sep) output_buffer->offset -= strlen(output_buffer->item_separator);
+                    }
                 }
+
                 output_pointer = (output_buffer->buffer + output_buffer->offset);
                 length = 0;
                 goto SKIP_PRINT;
@@ -437,13 +454,8 @@ static bool print_object(PyObject *item, printbuffer *const output_buffer) {
 
         update_offset(output_buffer);
 
-        length = (size_t) (output_buffer->format ? 2 : 1);
-        output_pointer = ensure(output_buffer, length);
-        if (output_pointer == NULL) {
-            return false;
-        }
-        *output_pointer++ = ':';
-        if (output_buffer->format) {
+        length = (size_t) (output_buffer->format ? 1 : 0) + strlen(output_buffer->key_separator);
+        insert_seperator(output_buffer->key_separator, length) if (output_buffer->format) {
             *output_pointer++ = '\t';
         }
         output_buffer->offset += length;
@@ -458,13 +470,15 @@ static bool print_object(PyObject *item, printbuffer *const output_buffer) {
         next_element = PyIter_Next(iter);
 
         /* print comma if not last */
-        length = ((size_t) (output_buffer->format ? 1 : 0) + (size_t) (next_element ? 1 : 0));
+        length = ((size_t) (output_buffer->format ? 1 : 0) + (size_t) (next_element ? strlen(output_buffer->item_separator) : 0));
         output_pointer = ensure(output_buffer, length + 1);
         if (output_pointer == NULL) {
             return false;
         }
         if (next_element) {
-            *output_pointer++ = ',';
+            if (PyErr_Occurred()) return false;
+            // no need to allocate memory for seperator
+            insert_seperator(output_buffer->item_separator, 0)
         }
 
     SKIP_PRINT:
@@ -547,12 +561,14 @@ PyObject *pycJSON_Encode(PyObject *self, PyObject *args, PyObject *kwargs) {
 
     unsigned char stack_buffer[CJSON_PRINTBUFFER_MAX_STACK_SIZE];
 
-    static const char *kwlist[] = {"obj", "format", "skipkeys", "allow_nan", NULL};
+    static const char *kwlist[] = {"obj", "format", "skipkeys", "allow_nan", "separators", NULL};
     PyObject *arg;
     buffer->format = false;
     buffer->skipkeys = false;
     buffer->allow_nan = true;
-    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O|ppp", (char **) kwlist, &arg, &buffer->format, &buffer->skipkeys, &buffer->allow_nan)) {
+    buffer->item_separator = ",";
+    buffer->key_separator = ":";
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O|ppp(ss)", (char **) kwlist, &arg, &buffer->format, &buffer->skipkeys, &buffer->allow_nan, &buffer->item_separator, &buffer->key_separator)) {
         if (!PyErr_Occurred()) PyErr_SetString(PyExc_TypeError, "Failed to parse arguments");
         return NULL;
     }
