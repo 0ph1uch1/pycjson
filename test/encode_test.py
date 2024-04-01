@@ -33,6 +33,29 @@ class TestEncode(unittest.TestCase):
         #         with self.assertRaises(MemoryError):
         #             cjson.dumps(case)
 
+    def test_skipkeys(self):
+        import cjson
+        import json
+
+        class A:
+            pass
+
+        test_cases = [
+            {"a": 1, 2: 3},
+            {"a": "b", A(): 1},
+            {A(): 1, "a": "b"},
+            {"e": 2, A(): 1, "a": "b"},
+        ]
+
+        for case in test_cases:
+            result_json = json.dumps(case, indent=None, separators=(",", ":"), ensure_ascii=False, skipkeys=True)
+            result_loadback_json = json.loads(result_json)
+
+            with self.subTest(msg=f'encoding_test(case={case})'):
+                result_cjson = cjson.dumps(case, skipkeys=True)
+                result_loadback_cjson = json.loads(result_cjson)
+                self._check_obj_same(result_loadback_json, result_loadback_cjson)
+
     def test_encode(self):
         import collections
         import json
