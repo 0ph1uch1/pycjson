@@ -31,6 +31,7 @@ typedef struct printbuffer {
     /* args to print */
     bool format; /* is this print a formatted print */
     bool skipkeys;
+    bool allow_nan;
 } printbuffer;
 
 // forward declaration
@@ -119,11 +120,19 @@ static bool print_number(PyObject *item, printbuffer *const output_buffer) {
 
         /* This checks for NaN and Infinity */
         if (isinf(d)) {
+            if (!output_buffer->allow_nan) {
+                PyErr_Format(PyExc_ValueError, "Number is not a valid JSON value: %f", d);
+                return false;
+            }
             if (d < 0)
                 length = sprintf((char *) number_buffer, "-Infinity");
             else
                 length = sprintf((char *) number_buffer, "Infinity");
         } else if (isnan(d)) {
+            if (!output_buffer->allow_nan) {
+                PyErr_SetString(PyExc_ValueError, "Number is not a valid JSON value, nan is not allowed");
+                return false;
+            }
             length = sprintf((char *) number_buffer, "NaN");
         } else {
             /* Try 15 decimal places of precision to avoid nonsignificant nonzero digits */
@@ -412,10 +421,10 @@ static bool print_object(PyObject *item, printbuffer *const output_buffer) {
             }
             Py_DECREF(str);
         } else {
-            if(output_buffer->skipkeys) {
+            if (output_buffer->skipkeys) {
                 Py_DECREF(next_element);
                 next_element = PyIter_Next(iter);
-                if(next_element == NULL && *(output_buffer->buffer + output_buffer->offset - 1) == ',') {
+                if (next_element == NULL && *(output_buffer->buffer + output_buffer->offset - 1) == ',') {
                     output_buffer->offset--;
                 }
                 output_pointer = (output_buffer->buffer + output_buffer->offset);
@@ -458,7 +467,7 @@ static bool print_object(PyObject *item, printbuffer *const output_buffer) {
             *output_pointer++ = ',';
         }
 
-        SKIP_PRINT:
+    SKIP_PRINT:
         if (output_buffer->format) {
             *output_pointer++ = '\n';
         }
@@ -538,10 +547,12 @@ PyObject *pycJSON_Encode(PyObject *self, PyObject *args, PyObject *kwargs) {
 
     unsigned char stack_buffer[CJSON_PRINTBUFFER_MAX_STACK_SIZE];
 
-    static const char *kwlist[] = {"obj", "format", "skipkeys", NULL};
+    static const char *kwlist[] = {"obj", "format", "skipkeys", "allow_nan", NULL};
     PyObject *arg;
     buffer->format = false;
-    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O|pp", (char **) kwlist, &arg, &buffer->format, &buffer->skipkeys)) {
+    buffer->skipkeys = false;
+    buffer->allow_nan = true;
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O|ppp", (char **) kwlist, &arg, &buffer->format, &buffer->skipkeys, &buffer->allow_nan)) {
         if (!PyErr_Occurred()) PyErr_SetString(PyExc_TypeError, "Failed to parse arguments");
         return NULL;
     }

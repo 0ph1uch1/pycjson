@@ -1,3 +1,4 @@
+import math
 import os
 import sys
 import unittest
@@ -33,6 +34,21 @@ class TestEncode(unittest.TestCase):
         #         with self.assertRaises(MemoryError):
         #             cjson.dumps(case)
 
+    def test_allow_nan(self):
+        import cjson
+        import json
+
+        test_cases = [
+            math.nan,
+            math.inf,
+            -math.inf,
+        ]
+
+        for case in test_cases:
+            with self.subTest(msg=f'encoding_allow_nan_test(case={case})'):
+                self.assertRaises(ValueError, cjson.dumps, case, allow_nan=False)
+                self.assertRaises(ValueError, json.dumps, case, allow_nan=False)
+
     def test_skipkeys(self):
         import cjson
         import json
@@ -51,7 +67,7 @@ class TestEncode(unittest.TestCase):
             result_json = json.dumps(case, indent=None, separators=(",", ":"), ensure_ascii=False, skipkeys=True)
             result_loadback_json = json.loads(result_json)
 
-            with self.subTest(msg=f'encoding_test(case={case})'):
+            with self.subTest(msg=f'encoding_skipkeys_test(case={case})'):
                 result_cjson = cjson.dumps(case, skipkeys=True)
                 result_loadback_cjson = json.loads(result_cjson)
                 self._check_obj_same(result_loadback_json, result_loadback_cjson)
