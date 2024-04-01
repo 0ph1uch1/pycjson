@@ -121,7 +121,7 @@ static bool print_number(PyObject *item, printbuffer *const output_buffer) {
         /* This checks for NaN and Infinity */
         if (isinf(d)) {
             if (!output_buffer->allow_nan) {
-                PyErr_Format(PyExc_ValueError, "Number is not a valid JSON value: %f", d);
+                PyErr_SetString(PyExc_ValueError, "Number is not a valid JSON value: inf or -inf");
                 return false;
             }
             if (d < 0)
