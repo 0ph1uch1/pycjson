@@ -34,6 +34,7 @@ typedef struct printbuffer {
     bool allow_nan;
     const char *item_separator;
     const char *key_separator;
+    PyObject *default_func;
 } printbuffer;
 
 // forward declaration
@@ -547,7 +548,19 @@ static bool print_value(PyObject *item, printbuffer *const output_buffer) {
     else if (PyDict_Check(item))
         return print_object(item, output_buffer);
     else {
-        PyErr_SetString(PyExc_TypeError, "TypeError: Object of type is not JSON serializable"); // TODO ?
+        if (output_buffer->default_func) {
+            PyObject *re = PyObject_CallFunctionObjArgs(output_buffer->default_func, item, NULL);
+            if (re == NULL) {
+                PyErr_SetString(PyExc_TypeError, "TypeError: default argument function failed to encode object");
+                return false;
+            }
+            if (!PyUnicode_Check(re)) {
+                PyErr_SetString(PyExc_TypeError, "TypeError: default argument function must return string");
+                return false;
+            }
+            return print_string(re, output_buffer);
+        }
+        PyErr_SetString(PyExc_TypeError, "TypeError: Object of type is not JSON serializable");
         return false;
     }
 }
@@ -561,15 +574,20 @@ PyObject *pycJSON_Encode(PyObject *self, PyObject *args, PyObject *kwargs) {
 
     unsigned char stack_buffer[CJSON_PRINTBUFFER_MAX_STACK_SIZE];
 
-    static const char *kwlist[] = {"obj", "format", "skipkeys", "allow_nan", "separators", NULL};
+    static const char *kwlist[] = {"obj", "format", "skipkeys", "allow_nan", "separators", "default", NULL};
     PyObject *arg;
     buffer->format = false;
     buffer->skipkeys = false;
     buffer->allow_nan = true;
     buffer->item_separator = ",";
     buffer->key_separator = ":";
-    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O|ppp(ss)", (char **) kwlist, &arg, &buffer->format, &buffer->skipkeys, &buffer->allow_nan, &buffer->item_separator, &buffer->key_separator)) {
+    buffer->default_func = NULL;
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O|ppp(ss)O", (char **) kwlist, &arg, &buffer->format, &buffer->skipkeys, &buffer->allow_nan, &buffer->item_separator, &buffer->key_separator, &buffer->default_func)) {
         if (!PyErr_Occurred()) PyErr_SetString(PyExc_TypeError, "Failed to parse arguments");
+        return NULL;
+    }
+    if (buffer->default_func && !PyCallable_Check(buffer->default_func)) {
+        PyErr_SetString(PyExc_TypeError, "default_func must be callable");
         return NULL;
     }
     /* create buffer */

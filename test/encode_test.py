@@ -34,6 +34,31 @@ class TestEncode(unittest.TestCase):
         #         with self.assertRaises(MemoryError):
         #             cjson.dumps(case)
 
+    def test_default(self):
+        import cjson
+        import json
+
+        class A:
+            def __init__(self, a):
+                self.a = a
+
+        def d4(obj):
+            if isinstance(obj, A):
+                return obj.a
+            raise TypeError("Type not serializable")
+
+        test_cases = [
+            A("xsad"),
+            [1, 2, A("2uiujdsa"), "cw"],
+            {"a": 1, "b": A("d33qws")},
+        ]
+
+        for case in test_cases:
+            with self.subTest(msg=f'encoding_default_test(case={case})'):
+                result_json = json.dumps(case, default=d4, separators=(",", ":"))
+                result_cjson = cjson.dumps(case, default=d4)
+                self._check_obj_same(result_json, result_cjson)
+
     def test_allow_nan(self):
         import cjson
         import json
@@ -42,12 +67,14 @@ class TestEncode(unittest.TestCase):
             math.nan,
             math.inf,
             -math.inf,
+            [1, 2, math.nan, math.inf, -math.inf],
+            {"a": math.nan, "b": math.inf, "c": -math.inf},
         ]
 
         for case in test_cases:
             with self.subTest(msg=f'encoding_allow_nan_test(case={case})'):
                 self.assertRaises(ValueError, cjson.dumps, case, allow_nan=False)
-                self.assertRaises(ValueError, json.dumps, case, allow_nan=False)
+                self.assertRaises(ValueError, json.dumps, case, allow_nan=False, separators=(",", ":"))
 
     def test_seperators(self):
         import cjson
