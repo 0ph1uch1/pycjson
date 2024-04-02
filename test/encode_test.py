@@ -1,4 +1,3 @@
-import math
 import os
 import sys
 import unittest
@@ -62,6 +61,7 @@ class TestEncode(unittest.TestCase):
     def test_allow_nan(self):
         import cjson
         import json
+        import math
 
         test_cases = [
             math.nan,
