@@ -17,6 +17,35 @@ class TestDecode(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     cjson.loads(case)
 
+    def test_object_hook(self):
+        import cjson
+        import json
+
+        class A:
+            def __init__(self, a):
+                self.a = a
+
+            def __eq__(self, other):
+                return isinstance(other, A) and self.a == other.a
+
+        def d4(obj):
+            if "a" in obj:
+                return A(obj["a"])
+            return obj
+
+        test_cases = [
+            '{"a": 1}',
+            '[{"a": 1}]',
+            '{"a": {"a": 1}}',
+            '[{"a": {"a": 1}}, {"b": 2}]',
+        ]
+
+        for case in test_cases:
+            with self.subTest(msg=f'decoding_object_hook_test(case={case})'):
+                result_json = json.loads(case, object_hook=d4)
+                result_cjson = cjson.loads(case, object_hook=d4)
+                self._check_obj_same(result_json, result_cjson)
+
     def test_decode(self):
         import collections
         import json

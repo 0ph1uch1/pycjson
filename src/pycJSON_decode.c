@@ -26,6 +26,9 @@ typedef struct
     Py_ssize_t offset;
     Py_ssize_t depth; /* How deeply nested (in arrays/objects) is the input at the current offset. */
     internal_hooks hooks;
+
+    /* kwargs */
+    PyObject *object_hook;
 } parse_buffer;
 
 static bool parse_value(PyObject **item, parse_buffer *const input_buffer);
@@ -580,6 +583,15 @@ success:
     input_buffer->depth--;
 
     input_buffer->offset++;
+
+    if (input_buffer->object_hook) {
+        PyObject *re = PyObject_CallFunctionObjArgs(input_buffer->object_hook, *item, NULL);
+        if (re == NULL) {
+            PyErr_Format(PyExc_ValueError, "Failed to parse dictionary: object_hook failed\nposition: %d", input_buffer->offset);
+            goto fail;
+        }
+        *item = re;
+    }
     return true;
 
 fail:
@@ -666,13 +678,19 @@ static bool parse_value(PyObject **item, parse_buffer *const input_buffer) {
 }
 
 PyObject *pycJSON_Decode(PyObject *self, PyObject *args, PyObject *kwargs) {
-    parse_buffer buffer = {0, 0, 0, 0, {0, 0}};
+    parse_buffer buffer = {0, 0, 0, 0, {0, 0}, 0};
     PyObject *item = NULL;
 
     const char *value;
     Py_ssize_t buffer_length;
-    if (!PyArg_ParseTuple(args, "s#", &value, &buffer_length)) {
+    static const char *kwlist[] = {"s", "object_hook", NULL};
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "s#|O", (char **) kwlist, &value, &buffer_length, &buffer.object_hook)) {
         PyErr_Format(PyExc_TypeError, "Failed to parse JSON: invalid argument, expected str / bytes-like object");
+        goto fail;
+    }
+
+    if (buffer.object_hook && !PyCallable_Check(buffer.object_hook)) {
+        PyErr_Format(PyExc_TypeError, "Failed to parse JSON: object_hook is not callable");
         goto fail;
     }
 
