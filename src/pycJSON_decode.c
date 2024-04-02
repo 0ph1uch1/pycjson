@@ -493,9 +493,11 @@ loop_end:
         *((char *) (buffer_at_offset(input_buffer) + i)) = '\0';
     }
 
-    if (dec)
-        *item = PyFloat_FromDouble(strtod((const char *) starting_point, (char **) &after_end));
-    else
+    if (dec) {
+        const double temp = PyOS_string_to_double((const char *) starting_point, (char **) &after_end, PyExc_OverflowError);
+        if (PyErr_Occurred()) return false;
+        *item = PyFloat_FromDouble(temp);
+    } else
         *item = PyLong_FromString((const char *) starting_point, (char **) &after_end, 10);
     if (starting_point == after_end || NULL == *item) {
         PyErr_Format(PyExc_ValueError, "Failed to parse number: invalid number\nposition: %d", input_buffer->offset);
