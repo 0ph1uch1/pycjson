@@ -11,11 +11,15 @@ class TestDecode(unittest.TestCase):
     def test_fail(self):
         import cjson
 
-        test_cases = ["0xf"]
-        for case in test_cases:
-            with self.subTest(msg=f'decoding_fail_test(case={case})'):
-                with self.assertRaises(ValueError):
-                    cjson.loads(case)
+        test_cases = {
+            ValueError: ["0xf"],
+            OverflowError: ["1e500"]
+        }
+        for err, cases in test_cases.items():
+            for case in cases:
+                with self.subTest(msg=f'decoding_fail_test(case={case})'):
+                    with self.assertRaises(err):
+                        cjson.loads(case)
 
     def test_object_hook(self):
         import cjson
