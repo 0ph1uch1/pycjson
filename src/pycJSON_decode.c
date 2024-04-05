@@ -195,6 +195,34 @@ static parse_buffer *skip_utf8_bom(parse_buffer *const buffer) {
     return buffer;
 }
 
+// define two helper macros for the string parsing
+#define PARSE_STRING_CHAR_MATCHER(x) \
+    case 'b':                        \
+        *buffer_writer++ = '\b';     \
+        break;                       \
+    case 'f':                        \
+        *buffer_writer++ = '\f';     \
+        break;                       \
+    case 'n':                        \
+        *buffer_writer++ = '\n';     \
+        break;                       \
+    case 'r':                        \
+        *buffer_writer++ = '\r';     \
+        break;                       \
+    case 't':                        \
+        *buffer_writer++ = '\t';     \
+        break;                       \
+    case '\"':                       \
+    case '\\':                       \
+    case '/':                        \
+        *buffer_writer++ = (x);      \
+        break;
+
+#define PARSE_STRING_FINALIZE                                            \
+    if (buffer_ptr != NULL && buffer_ptr != parse_string_stack_buffer) { \
+        input_buffer->hooks.deallocate(buffer_ptr);                      \
+    }
+
 /* Parse the input text into an unescaped cinput, and populate item. */
 static bool parse_string(PyObject **item, parse_buffer *const input_buffer) {
     assert(item);
@@ -205,10 +233,6 @@ static bool parse_string(PyObject **item, parse_buffer *const input_buffer) {
     unsigned char *buffer_ptr = NULL;
     unsigned char parse_string_stack_buffer[STACK_BUFFER_SIZE];
 
-#define PARSE_STRING_FINALIZE                                            \
-    if (buffer_ptr != NULL && buffer_ptr != parse_string_stack_buffer) { \
-        input_buffer->hooks.deallocate(buffer_ptr);                      \
-    }
 
     /* not a string */
     if (buffer_at_offset(input_buffer)[0] != '\"') {
@@ -260,35 +284,18 @@ static bool parse_string(PyObject **item, parse_buffer *const input_buffer) {
             buffer_writer = (unsigned char *) PyUnicode_1BYTE_DATA(*item);
             input_buffer->offset++;
             while (input_buffer->offset < input_buffer->length && buffer_at_offset(input_buffer)[0] != '\"') {
+
                 if (buffer_at_offset(input_buffer)[0] != '\\') {
                     *buffer_writer++ = buffer_at_offset(input_buffer)[0];
                     input_buffer->offset++;
                 }
                 /* escape sequence */
                 else {
-                    switch (buffer_at_offset(input_buffer)[1]) {
-                        case 'b':
-                            *buffer_writer++ = '\b';
-                            break;
-                        case 'f':
-                            *buffer_writer++ = '\f';
-                            break;
-                        case 'n':
-                            *buffer_writer++ = '\n';
-                            break;
-                        case 'r':
-                            *buffer_writer++ = '\r';
-                            break;
-                        case 't':
-                            *buffer_writer++ = '\t';
-                            break;
-                        case '\"':
-                        case '\\':
-                        case '/':
-                            *buffer_writer++ = buffer_at_offset(input_buffer)[1];
-                            break;
+                    unsigned char this_char = buffer_at_offset(input_buffer)[1];
+                    switch (this_char) {
+                        PARSE_STRING_CHAR_MATCHER(this_char);
                         default:
-                            PyErr_Format(PyExc_ValueError, "Failed to parse string: invalid escape sequence(%d)\nposition: %d", buffer_at_offset(input_buffer)[1], input_buffer->offset);
+                            PyErr_Format(PyExc_ValueError, "Failed to parse string: invalid escape sequence(%d)\nposition: %d", this_char, input_buffer->offset);
                             goto fail;
                     }
                     input_buffer->offset += 2;
@@ -323,29 +330,9 @@ static bool parse_string(PyObject **item, parse_buffer *const input_buffer) {
                 PyErr_Format(PyExc_ValueError, "Failed to parse string: buffer overflow\nposition: %d", input_buffer->offset);
                 goto fail;
             }
-
-            switch (input_pointer[1]) {
-                case 'b':
-                    *buffer_writer++ = '\b';
-                    break;
-                case 'f':
-                    *buffer_writer++ = '\f';
-                    break;
-                case 'n':
-                    *buffer_writer++ = '\n';
-                    break;
-                case 'r':
-                    *buffer_writer++ = '\r';
-                    break;
-                case 't':
-                    *buffer_writer++ = '\t';
-                    break;
-                case '\"':
-                case '\\':
-                case '/':
-                    *buffer_writer++ = input_pointer[1];
-                    break;
-
+            unsigned char this_char = input_pointer[1];
+            switch (this_char) {
+                PARSE_STRING_CHAR_MATCHER(this_char);
                 /* UTF-16 literal */
                 case 'u':
                     sequence_length = utf16_literal_to_utf8(input_pointer, input_end, &buffer_writer);
@@ -385,8 +372,9 @@ fail:
     }
 
     return false;
-#undef PARSE_STRING_FINALIZE
 }
+#undef PARSE_STRING_FINALIZE
+#undef PARSE_STRING_CHAR_MATCHER
 
 /* Build an array from input text. */
 static bool parse_array(PyObject **item, parse_buffer *const input_buffer) {
