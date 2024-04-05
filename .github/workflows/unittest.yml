@@ -44,8 +44,9 @@ jobs:
       - name: run tests
         id: tests
         run: |
-          if [[ "${{ matrix.python-version }}" == "3.12" ]]; then
+          if [ "${{ matrix.python-version }}" = "3.12" ]; then
             python test/all_test.py
+          else
+            python test/all_test.py --ignore benchmark
           fi
-          python test/all_test.py --ignore benchmark
 
