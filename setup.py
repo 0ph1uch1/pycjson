@@ -15,7 +15,7 @@ def find_src():
     headers = []
     for root, _, files in os.walk("src"):
         for file in files:
-            if file.endswith(".c"):
+            if file.endswith(".c") or file.endswith(".cpp"):
                 srcs.append(os.path.join(root, file))
             elif file.endswith(".h"):
                 if file != "version_template.h":
