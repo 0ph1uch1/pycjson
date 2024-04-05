@@ -22,16 +22,15 @@ class TestEncode(unittest.TestCase):
                 with self.assertRaises(TypeError):
                     cjson.dumps(case)
 
-        # TODO uncomment this later
-        # # MemoryError
-        # test_cases = [
-        #     [1] * 2147483648
-        # ]
+        # MemoryError
+        test_cases = [
+            [1] * 2147483648
+        ]
 
-        # for case in test_cases:
-        #     with self.subTest(msg=f'encoding_fail_test(case={case})'):
-        #         with self.assertRaises(MemoryError):
-        #             cjson.dumps(case)
+        for case in test_cases:
+            with self.subTest(msg=f'encoding_fail_test(case={case})'):
+                with self.assertRaises(MemoryError):
+                    cjson.dumps(case)
 
     def test_default(self):
         import cjson
