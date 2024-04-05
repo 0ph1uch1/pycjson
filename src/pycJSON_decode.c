@@ -241,15 +241,13 @@ static bool parse_string(PyObject **item, parse_buffer *const input_buffer) {
     }
 
     {
-        int is_ascii = 1;
+        bool is_ascii = true;
         /* calculate approximate size of the output (overestimate) */
         Py_ssize_t allocation_length = 0;
         Py_ssize_t skipped_bytes = 0;
         while (((Py_ssize_t) (input_end - input_buffer->content) < input_buffer->length) && (*input_end != '\"')) {
-            if (is_ascii) {
-                if (*input_end & 0x80) {
-                    is_ascii = 0;
-                }
+            if (is_ascii && (*input_end & 0x80)) {
+                is_ascii = false;
             }
             /* is escape sequence */
             if (input_end[0] == '\\') {
@@ -259,7 +257,7 @@ static bool parse_string(PyObject **item, parse_buffer *const input_buffer) {
                     goto fail;
                 }
                 if (is_ascii && input_end[1] == 'u') {
-                    is_ascii = 0;
+                    is_ascii = false;
                 }
                 skipped_bytes++;
                 input_end++;
@@ -284,7 +282,6 @@ static bool parse_string(PyObject **item, parse_buffer *const input_buffer) {
             buffer_writer = (unsigned char *) PyUnicode_1BYTE_DATA(*item);
             input_buffer->offset++;
             while (input_buffer->offset < input_buffer->length && buffer_at_offset(input_buffer)[0] != '\"') {
-
                 if (buffer_at_offset(input_buffer)[0] != '\\') {
                     *buffer_writer++ = buffer_at_offset(input_buffer)[0];
                     input_buffer->offset++;
