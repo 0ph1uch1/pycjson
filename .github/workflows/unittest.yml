@@ -51,5 +51,5 @@ jobs:
         if: ${{ matrix.python-version != '3.12' }}
         id: tests_no_benchmark
         run: |
-            python test/all_test.py --no-benchmark
+            python test/all_test.py --ignore benchmark
 
