@@ -115,7 +115,7 @@ static bool print_number(PyObject *item, printbuffer *const output_buffer) {
         length = sprintf((char *) number_buffer, "%lld", PyLong_AsLongLong(item));
     } else // it is float
     {
-        double d = PyFloat_AsDouble(item);
+        double d = PyFloat_AS_DOUBLE(item);
         if (PyErr_Occurred()) {
             PyErr_SetString(PyExc_TypeError, "Number is not a float");
             return false;

@@ -15,11 +15,13 @@ class TestEncode(unittest.TestCase):
             pass
 
         # TypeError
-        test_cases = [A()]
+        test_cases = {
+            TypeError: [A(), 1 + 1j]
+        }
 
-        for case in test_cases:
+        for err, case in test_cases.items():
             with self.subTest(msg=f'encoding_fail_test(case={case})'):
-                with self.assertRaises(TypeError):
+                with self.assertRaises(err):
                     cjson.dumps(case)
 
         # TODO uncomment this later
