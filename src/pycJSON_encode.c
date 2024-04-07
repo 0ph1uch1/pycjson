@@ -11,12 +11,12 @@ typedef struct printbuffer printbuffer;
 
 typedef struct internal_hooks {
     void(CJSON_CDECL *deallocate_self)(printbuffer *);
-    void(CJSON_CDECL *reallocate)(printbuffer *, size_t size, size_t copy_len);
+    void *(CJSON_CDECL *reallocate)(printbuffer *, size_t size, size_t copy_len);
 } internal_hooks;
 
 static void CJSON_CDECL internal_free(printbuffer *);
 
-static void CJSON_CDECL internal_realloc(printbuffer *, size_t, size_t);
+static void *CJSON_CDECL internal_realloc(printbuffer *, size_t, size_t);
 
 static internal_hooks global_hooks = {internal_free, internal_realloc};
 
@@ -72,8 +72,8 @@ static unsigned char *ensure(printbuffer *const p, size_t needed) {
     }
 
     /* reallocate with realloc if available */
-    p->hooks.reallocate(p, newsize, p->offset + 1);
-    if (p->buffer == NULL) {
+    if (p->hooks.reallocate(p, newsize, p->offset + 1) == NULL) {
+        // fail
         return NULL;
     }
 
@@ -621,7 +621,7 @@ static void CJSON_CDECL internal_free(printbuffer *buffer) {
     buffer->length = 0;
 }
 
-static void CJSON_CDECL internal_realloc(printbuffer *buffer, size_t size, size_t copy_len) {
+static void *CJSON_CDECL internal_realloc(printbuffer *buffer, size_t size, size_t copy_len) {
     if (size > INT_MAX) {
         if (buffer->buffer != NULL && buffer->using_heap) {
             PyMem_Free(buffer->buffer);
@@ -629,20 +629,20 @@ static void CJSON_CDECL internal_realloc(printbuffer *buffer, size_t size, size_
         buffer->buffer = NULL;
         buffer->length = 0;
         PyErr_SetString(PyExc_MemoryError, "Failed to allocate memory for buffer: size is over INT_MAX");
-        return;
+        return NULL;
     }
     if (size <= buffer->length) {
-        return;
+        return buffer->buffer;
     }
     if (size < CJSON_PRINTBUFFER_MAX_STACK_SIZE && !buffer->using_heap) {
         // no copy, using current stack buffer
         if (buffer->buffer == NULL) {
             // should not reach here
             buffer->length = 0;
-            return;
+            return NULL;
         }
         buffer->length = size;
-        return;
+        return buffer->buffer;
     }
     unsigned char *newbuffer = (unsigned char *) PyMem_Malloc(size);
     if (newbuffer == NULL) {
@@ -653,7 +653,7 @@ static void CJSON_CDECL internal_realloc(printbuffer *buffer, size_t size, size_
         buffer->buffer = NULL;
         buffer->length = 0;
         PyErr_SetString(PyExc_MemoryError, "Failed to reallocate memory for buffer");
-        return;
+        return NULL;
     }
     memcpy(newbuffer, buffer->buffer, cjson_min(copy_len, size));
     if (buffer->using_heap && buffer->buffer != NULL) {
@@ -662,4 +662,5 @@ static void CJSON_CDECL internal_realloc(printbuffer *buffer, size_t size, size_
     buffer->buffer = newbuffer;
     buffer->length = size;
     buffer->using_heap = true;
+    return newbuffer;
 }
