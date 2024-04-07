@@ -73,6 +73,9 @@ static unsigned char *ensure(printbuffer *const p, size_t needed) {
 
     /* reallocate with realloc if available */
     p->hooks.reallocate(p, newsize, p->offset + 1);
+    if (p->buffer == NULL) {
+        return NULL;
+    }
 
     return p->buffer + p->offset;
 }
@@ -612,7 +615,7 @@ PyObject *pycJSON_FileEncode(PyObject *self, PyObject *args, PyObject *kwargs) {
 
 static void CJSON_CDECL internal_free(printbuffer *buffer) {
     if (buffer->using_heap) {
-        free(buffer->buffer);
+        PyMem_Free(buffer->buffer);
     }
     buffer->buffer = NULL;
     buffer->length = 0;
@@ -621,10 +624,11 @@ static void CJSON_CDECL internal_free(printbuffer *buffer) {
 static void *CJSON_CDECL internal_realloc(printbuffer *buffer, size_t size, size_t copy_len) {
     if (size > INT_MAX) {
         if (buffer->buffer != NULL && buffer->using_heap) {
-            free(buffer->buffer);
+            PyMem_Free(buffer->buffer);
         }
         buffer->buffer = NULL;
         buffer->length = 0;
+        PyErr_SetString(PyExc_MemoryError, "Failed to allocate memory for buffer: size is over INT_MAX");
         return NULL;
     }
     if (size <= buffer->length) {
@@ -640,19 +644,20 @@ static void *CJSON_CDECL internal_realloc(printbuffer *buffer, size_t size, size
         buffer->length = size;
         return buffer->buffer;
     }
-    unsigned char *newbuffer = (unsigned char *) malloc(size);
+    unsigned char *newbuffer = (unsigned char *) PyMem_Malloc(size);
     if (newbuffer == NULL) {
         // fail
         if (buffer->using_heap && buffer->buffer != NULL) {
-            free(buffer->buffer);
+            PyMem_Free(buffer->buffer);
         }
         buffer->buffer = NULL;
         buffer->length = 0;
+        PyErr_SetString(PyExc_MemoryError, "Failed to reallocate memory for buffer");
         return NULL;
     }
     memcpy(newbuffer, buffer->buffer, cjson_min(copy_len, size));
     if (buffer->using_heap && buffer->buffer != NULL) {
-        free(buffer->buffer);
+        PyMem_Free(buffer->buffer);
     }
     buffer->buffer = newbuffer;
     buffer->length = size;

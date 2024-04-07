@@ -17,7 +17,7 @@ typedef struct internal_hooks {
     void(CJSON_CDECL *deallocate)(void *pointer);
 } internal_hooks;
 
-static internal_hooks global_hooks = {malloc, free};
+static internal_hooks global_hooks = {PyMem_Malloc, PyMem_Free};
 
 typedef struct
 {
