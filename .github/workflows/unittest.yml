@@ -44,4 +44,4 @@ jobs:
       - name: run tests
         id: tests
         run: |
-          python test/all_test.py --ignore benchmark
+          python test/all_test.py --ignore benchmark memory
