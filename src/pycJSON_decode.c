@@ -721,14 +721,10 @@ fail:
     return NULL;
 }
 
-// PyObject *pycJSON_DecodeFile(PyObject *self, PyObject *args, PyObject *kwargs) {
-//     Py_RETURN_NOTIMPLEMENTED;
-// }
-
 PyObject *pycJSON_DecodeFile(PyObject *self, PyObject *args, PyObject *kwargs) {
     PyObject *file_obj = NULL;
     PyObject *read_method = NULL;
-    PyObject *file_content = NULL;
+    PyObject *file_contents = NULL;
     PyObject *result = NULL;
     PyObject *argtuple = NULL;
 
@@ -749,25 +745,25 @@ PyObject *pycJSON_DecodeFile(PyObject *self, PyObject *args, PyObject *kwargs) {
         return NULL;
     }
 
-    file_content = PyObject_CallObject(read_method, NULL);
+    file_contents = PyObject_CallObject(read_method, NULL);
     Py_XDECREF(read_method);
 
-    if (file_content == NULL) {
+    if (file_contents == NULL) {
         return NULL;
     }
 
-    if (!PyUnicode_Check(file_content)) {
-        Py_XDECREF(file_content);
+    if (!PyUnicode_Check(file_contents)) {
+        Py_XDECREF(file_contents);
         PyErr_Format(PyExc_ValueError, "file content must be a string");
         return NULL;
     }
 
     // file to tuple, then call pycJSON_Decode
-    argtuple = PyTuple_Pack(1, file_content);
+    argtuple = PyTuple_Pack(1, file_contents);
     result = pycJSON_Decode(self, argtuple, kwargs);
     
     Py_XDECREF(argtuple);
-    Py_XDECREF(file_content);
+    Py_XDECREF(file_contents);
 
     if (result == NULL) {
         return NULL;
@@ -775,52 +771,3 @@ PyObject *pycJSON_DecodeFile(PyObject *self, PyObject *args, PyObject *kwargs) {
 
     return result;
 }
-
-// PyObject* JSONFileToObj(PyObject* self, PyObject *args, PyObject *kwargs)
-// {
-//   PyObject *read;
-//   PyObject *string;
-//   PyObject *result;
-//   PyObject *file = NULL;
-//   PyObject *argtuple;
-
-//   if (!PyArg_ParseTuple (args, "O", &file))
-//   {
-//     return NULL;
-//   }
-
-//   if (!PyObject_HasAttrString (file, "read"))
-//   {
-//     PyErr_Format (PyExc_TypeError, "expected file");
-//     return NULL;
-//   }
-
-//   read = PyObject_GetAttrString (file, "read");
-
-//   if (!PyCallable_Check (read)) {
-//     Py_XDECREF(read);
-//     PyErr_Format (PyExc_TypeError, "expected file");
-//     return NULL;
-//   }
-
-//   string = PyObject_CallObject (read, NULL);
-//   Py_XDECREF(read);
-
-//   if (string == NULL)
-//   {
-//     return NULL;
-//   }
-
-//   argtuple = PyTuple_Pack(1, string);
-
-//   result = JSONToObj (self, argtuple, kwargs);
-
-//   Py_XDECREF(argtuple);
-//   Py_XDECREF(string);
-
-//   if (result == NULL) {
-//     return NULL;
-//   }
-
-//   return result;
-// }

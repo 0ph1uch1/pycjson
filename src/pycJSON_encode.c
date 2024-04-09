@@ -610,7 +610,67 @@ PyObject *pycJSON_Encode(PyObject *self, PyObject *args, PyObject *kwargs) {
 }
 
 PyObject *pycJSON_FileEncode(PyObject *self, PyObject *args, PyObject *kwargs) {
-    Py_RETURN_NOTIMPLEMENTED;
+    PyObject *json_data;
+    PyObject *file_obj;
+    PyObject *file_contents;
+    PyObject *write_method;
+    PyObject *argtuple;
+    PyObject *result;
+
+    if (!PyArg_ParseTuple(args, "OO", &json_data, &file_obj)) {
+        return NULL;
+    }
+
+    if (!PyObject_HasAttrString(file_obj, "write")) {
+        PyErr_Format(PyExc_TypeError, "object must have a 'write' method");
+        return NULL;
+    }
+
+    write_method = PyObject_GetAttrString(file_obj, "write");
+
+    if (!PyCallable_Check(write_method)) {
+        PyErr_Format(PyExc_TypeError, "'read' method is not callable");
+        return NULL;
+    }
+
+    argtuple = PyTuple_Pack(1, json_data);
+
+    result = pycJSON_Encode(self, argtuple, kwargs);
+    Py_XDECREF(argtuple);
+
+    if (result == NULL) {
+        Py_XDECREF(write_method);
+        return NULL;
+    }
+
+    if(!PyUnicode_Check(result)) {
+        Py_XDECREF(result);
+        Py_XDECREF(write_method);
+        PyErr_Format(PyExc_TypeError, "file content must be a string");
+        return NULL;
+    }
+
+
+    argtuple = PyTuple_Pack(1, result);
+    if (argtuple == NULL) {
+        Py_XDECREF(write_method);
+        Py_XDECREF(result);
+        return NULL;
+    }
+
+    file_contents = PyObject_CallObject(write_method, argtuple);
+    Py_XDECREF(argtuple);
+
+    if (file_contents == NULL) {
+        Py_XDECREF(write_method);
+        return NULL;
+    }
+
+    Py_XDECREF(write_method);
+    Py_XDECREF(result);
+    Py_XDECREF(file_contents);
+
+    Py_RETURN_NONE;
 }
 
 static void CJSON_CDECL internal_free(printbuffer *buffer) {
