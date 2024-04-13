@@ -733,7 +733,7 @@ PyObject *pycJSON_DecodeFile(PyObject *self, PyObject *args, PyObject *kwargs) {
     }
 
     if (!PyObject_HasAttrString(file_obj, "read")) {
-        PyErr_Format(PyExc_TypeError, "object must have a 'read' method");
+        PyErr_SetString(PyExc_TypeError, "object must have a 'read' method");
         return NULL;
     }
 
@@ -741,7 +741,7 @@ PyObject *pycJSON_DecodeFile(PyObject *self, PyObject *args, PyObject *kwargs) {
 
     if (!PyCallable_Check(read_method)) {
         Py_XDECREF(read_method);
-        PyErr_Format(PyExc_TypeError, "'read' method is not callable");
+        PyErr_SetString(PyExc_TypeError, "'read' method is not callable");
         return NULL;
     }
 
@@ -754,7 +754,7 @@ PyObject *pycJSON_DecodeFile(PyObject *self, PyObject *args, PyObject *kwargs) {
 
     if (!PyUnicode_Check(file_contents)) {
         Py_XDECREF(file_contents);
-        PyErr_Format(PyExc_ValueError, "file content must be a string");
+        PyErr_SetString(PyExc_ValueError, "file content must be a string");
         return NULL;
     }
 

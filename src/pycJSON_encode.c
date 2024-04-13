@@ -622,14 +622,14 @@ PyObject *pycJSON_FileEncode(PyObject *self, PyObject *args, PyObject *kwargs) {
     }
 
     if (!PyObject_HasAttrString(file_obj, "write")) {
-        PyErr_Format(PyExc_TypeError, "object must have a 'write' method");
+        PyErr_SetString(PyExc_TypeError, "object must have a 'write' method");
         return NULL;
     }
 
     write_method = PyObject_GetAttrString(file_obj, "write");
 
     if (!PyCallable_Check(write_method)) {
-        PyErr_Format(PyExc_TypeError, "'read' method is not callable");
+        PyErr_SetString(PyExc_TypeError, "'read' method is not callable");
         return NULL;
     }
 
@@ -646,7 +646,7 @@ PyObject *pycJSON_FileEncode(PyObject *self, PyObject *args, PyObject *kwargs) {
     if(!PyUnicode_Check(result)) {
         Py_XDECREF(result);
         Py_XDECREF(write_method);
-        PyErr_Format(PyExc_TypeError, "file content must be a string");
+        PyErr_SetString(PyExc_TypeError, "file content must be a string");
         return NULL;
     }
 
