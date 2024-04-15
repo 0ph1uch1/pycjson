@@ -617,7 +617,8 @@ PyObject *pycJSON_FileEncode(PyObject *self, PyObject *args, PyObject *kwargs) {
     PyObject *argtuple;
     PyObject *result;
 
-    if (!PyArg_ParseTuple(args, "OO", &json_data, &file_obj)) {
+    static const char *kwlist[] = {"obj", "fp", NULL};
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "OO", (char **) kwlist, &json_data, &file_obj)) {
         return NULL;
     }
 

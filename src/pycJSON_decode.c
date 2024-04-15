@@ -728,7 +728,8 @@ PyObject *pycJSON_DecodeFile(PyObject *self, PyObject *args, PyObject *kwargs) {
     PyObject *result = NULL;
     PyObject *argtuple = NULL;
 
-    if(!PyArg_ParseTuple(args, "O", &file_obj)) {
+    static const char *kwlist[] = {"fp", NULL};
+    if(!PyArg_ParseTupleAndKeywords(args, kwargs, "O", (char **) kwlist, &file_obj)) {
         return NULL;
     }
 
