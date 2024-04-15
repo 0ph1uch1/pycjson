@@ -726,12 +726,11 @@ PyObject *pycJSON_DecodeFile(PyObject *self, PyObject *args, PyObject *kwargs) {
     PyObject *read_method = NULL;
     PyObject *file_contents = NULL;
     PyObject *result = NULL;
-    PyObject *args_tuple = NULL;
+    PyObject *argtuple = NULL;
 
-    if(!PyArg_ParseTuple(args, "O", &args_tuple)) {
+    if(!PyArg_ParseTuple(args, "O", &file_obj)) {
         return NULL;
     }
-    file_obj = PyTuple_GetItem(args_tuple, 0);
 
     if (!PyObject_HasAttrString(file_obj, "read")) {
         PyErr_SetString(PyExc_TypeError, "object must have a 'read' method");
@@ -759,10 +758,11 @@ PyObject *pycJSON_DecodeFile(PyObject *self, PyObject *args, PyObject *kwargs) {
         return NULL;
     }
 
-    args_tuple = PyTuple_SetItem(args_tuple, 0, file_contents);
-    result = pycJSON_Decode(self, args_tuple, kwargs);
+    // file to tuple, then call pycJSON_Decode
+    argtuple = PyTuple_Pack(1, file_contents);
+    result = pycJSON_Decode(self, argtuple, kwargs);
     
-    Py_XDECREF(args_tuple);
+    Py_XDECREF(argtuple);
     Py_XDECREF(file_contents);
 
     if (result == NULL) {

@@ -614,17 +614,12 @@ PyObject *pycJSON_FileEncode(PyObject *self, PyObject *args, PyObject *kwargs) {
     PyObject *file_obj;
     PyObject *file_contents;
     PyObject *write_method;
-    PyObject *args_tuple;
     PyObject *argtuple;
     PyObject *result;
 
-    if (!PyArg_ParseTuple(args, "O", &args_tuple)) {
+    if (!PyArg_ParseTuple(args, "OO", &json_data, &file_obj)) {
         return NULL;
     }
-
-    json_data = PyTuple_GetItem(args_tuple, 0);
-    file_obj = PyTuple_GetItem(args_tuple, 1);
-
 
     if (!PyObject_HasAttrString(file_obj, "write")) {
         PyErr_SetString(PyExc_TypeError, "object must have a 'write' method");
@@ -638,11 +633,10 @@ PyObject *pycJSON_FileEncode(PyObject *self, PyObject *args, PyObject *kwargs) {
         return NULL;
     }
 
-    args_tuple = PyTuple_GetSlice(args_tuple, 0, PyTuple_Size(args_tuple));
-    PyTuple_SET_ITEM(args_tuple, 0, json_data);
+    argtuple = PyTuple_Pack(1, json_data);
 
-    result = pycJSON_Encode(self, args_tuple, kwargs);
-    Py_XDECREF(args_tuple);
+    result = pycJSON_Encode(self, argtuple, kwargs);
+    Py_XDECREF(argtuple);
 
     if (result == NULL) {
         Py_XDECREF(write_method);
