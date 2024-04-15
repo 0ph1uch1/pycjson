@@ -18,6 +18,18 @@ class TestJsonFileIO(unittest.TestCase):
             os.remove(self.filepath)
 
     def test_json_load(self):
+        class A:
+            def __init__(self, a):
+                self.a = a
+
+            def __eq__(self, other):
+                return isinstance(other, A) and self.a == other.a
+
+        def d4(obj):
+            if "a" in obj:
+                return A(obj["a"])
+            return obj
+        
         with open(self.filepath, "w") as f:
             json.dump(self.test_data, f)
 
@@ -31,7 +43,7 @@ class TestJsonFileIO(unittest.TestCase):
             json.dump(self.test_data, f)
 
         with open(self.filepath, "r") as f:
-            loaded_data = cjson.load("dummy", fp=f)
+            loaded_data = cjson.load(object_hook=d4, fp=f)
         
         self.assertEqual(loaded_data, self.test_data)
 
@@ -41,18 +53,18 @@ class TestJsonFileIO(unittest.TestCase):
 
         with open(self.filepath, "r") as f:
             # file_contents = f.read()
-            loaded_data = json.loads(f)
+            loaded_data = json.load(f)
         # loaded_data = json.load(file_contents)
 
         self.assertEqual(loaded_data, self.test_data)
 
         # keywords parse
         with open(self.filepath, "w") as f:
-            cjson.dump("dummy", fp=f, obj=self.test_data)
+            cjson.dump(skipkeys=False, fp=f, obj=self.test_data)
 
         with open(self.filepath, "r") as f:
             # file_contents = f.read()
-            loaded_data = json.loads(f)
+            loaded_data = json.load(f)
         # loaded_data = json.load(file_contents)
 
         self.assertEqual(loaded_data, self.test_data)
