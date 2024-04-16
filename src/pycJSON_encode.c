@@ -627,14 +627,14 @@ PyObject *pycJSON_FileEncode(PyObject *self, PyObject *args, PyObject *kwargs) {
     }
     else {
         // segmentation fault here
-        // PyDict_DelItemString(kwargs, "obj");
+        PyDict_DelItemString(kwargs, "obj");
     }
     if (fp == NULL && PyTuple_Size(args) > 1){
         fp = PyTuple_GetItem(args, 1);
     }
     else {
         // segmentation fault here
-        // PyDict_DelItemString(kwargs, "fp");
+        PyDict_DelItemString(kwargs, "fp");
     }
     if (obj == NULL || fp == NULL) {
         PyErr_SetString(PyExc_TypeError, "obj and fp are required arguments");

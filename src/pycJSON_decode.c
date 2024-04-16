@@ -737,7 +737,7 @@ PyObject *pycJSON_DecodeFile(PyObject *self, PyObject *args, PyObject *kwargs) {
         fp = PyTuple_GET_ITEM(args, 0);
     }
     else {
-        // PyDict_DelItemString(kwargs, "fp");
+        PyDict_DelItemString(kwargs, "fp");
     }
 
     if(fp == NULL) {
