@@ -724,7 +724,6 @@ fail:
 PyObject *pycJSON_DecodeFile(PyObject *self, PyObject *args, PyObject *kwargs) {
     parse_buffer buffer = {0, 0, 0, 0, {0, 0}, 0};
     PyObject *item = NULL;
-
     PyObject *file_obj = NULL;
     PyObject *read_method = NULL;
     PyObject *file_contents = NULL;
@@ -742,7 +741,6 @@ PyObject *pycJSON_DecodeFile(PyObject *self, PyObject *args, PyObject *kwargs) {
     }
 
     read_method = PyObject_GetAttrString(file_obj, "read");
-
     if (!PyCallable_Check(read_method)) {
         Py_XDECREF(read_method);
         PyErr_SetString(PyExc_TypeError, "'read' method is not callable");
@@ -804,58 +802,3 @@ fail:
     }
     return NULL;
 }
-
-// PyObject *pycJSON_DecodeFile(PyObject *self, PyObject *args, PyObject *kwargs) {
-//     PyObject *file_obj = NULL;
-//     PyObject *read_method = NULL;
-//     PyObject *file_contents = NULL;
-//     PyObject *result = NULL;
-//     PyObject *argtuple = NULL;
-
-//     static const char *kwlist[] = {"fp", NULL};
-//     if(!PyArg_ParseTupleAndKeywords(args, kwargs, "O", (char **) kwlist, &file_obj)) {
-//         return NULL;
-//     }
-
-//     // PyObject* pycJSON_Decode_kwargs = PyDict_Copy(kwargs);
-//     // PyDict_DelItemString(pycJSON_Decode_kwargs, "fp");
-
-//     if (!PyObject_HasAttrString(file_obj, "read")) {
-//         PyErr_SetString(PyExc_TypeError, "object must have a 'read' method");
-//         return NULL;
-//     }
-
-//     read_method = PyObject_GetAttrString(file_obj, "read");
-
-//     if (!PyCallable_Check(read_method)) {
-//         Py_XDECREF(read_method);
-//         PyErr_SetString(PyExc_TypeError, "'read' method is not callable");
-//         return NULL;
-//     }
-
-//     file_contents = PyObject_CallObject(read_method, NULL);
-//     Py_XDECREF(read_method);
-
-//     if (file_contents == NULL) {
-//         return NULL;
-//     }
-
-//     if (!PyUnicode_Check(file_contents)) {
-//         Py_XDECREF(file_contents);
-//         PyErr_SetString(PyExc_ValueError, "file content must be a string");
-//         return NULL;
-//     }
-
-//     // file to tuple, then call pycJSON_Decode
-//     argtuple = PyTuple_Pack(1, file_contents);
-//     result = pycJSON_Decode(self, argtuple, kwargs);
-    
-//     Py_XDECREF(argtuple);
-//     Py_XDECREF(file_contents);
-
-//     if (result == NULL) {
-//         return NULL;
-//     }
-
-//     return result;
-// }
