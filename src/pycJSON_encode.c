@@ -609,71 +609,78 @@ PyObject *pycJSON_Encode(PyObject *self, PyObject *args, PyObject *kwargs) {
     return re;
 }
 
-
 PyObject *pycJSON_FileEncode(PyObject *self, PyObject *args, PyObject *kwargs) {
-    PyObject *obj;
-    PyObject *fp;
-    PyObject *file_contents;
-    PyObject *write_method;
-    PyObject *argtuple;
-    PyObject *result;
+    static const size_t default_buffer_size = CJSON_PRINTBUFFER_MAX_STACK_SIZE;
+    printbuffer buffer[1];
 
-    if (kwargs != NULL) {
-        obj = PyDict_GetItemString(kwargs, "obj");
-        fp = PyDict_GetItemString(kwargs, "fp");
-    }
-    if (obj == NULL && PyTuple_Size(args) > 0) {
-        obj = PyTuple_GetItem(args, 0);
-    }
-    else {
-        // segmentation fault here
-        // PyDict_DelItemString(kwargs, "obj");
-    }
-    if (fp == NULL && PyTuple_Size(args) > 1){
-        fp = PyTuple_GetItem(args, 1);
-    }
-    else {
-        // segmentation fault here
-        // PyDict_DelItemString(kwargs, "fp");
-    }
-    if (obj == NULL || fp == NULL) {
-        PyErr_SetString(PyExc_TypeError, "obj and fp are required arguments");
+    memset(buffer, 0, sizeof(buffer));
+
+    unsigned char stack_buffer[CJSON_PRINTBUFFER_MAX_STACK_SIZE];
+
+    static const char *kwlist[] = {"obj", "fp", "format", "skipkeys", "allow_nan", "separators", "default", NULL};
+    PyObject *arg;
+    buffer->format = false;
+    buffer->skipkeys = false;
+    buffer->allow_nan = true;
+    buffer->item_separator = ",";
+    buffer->key_separator = ":";
+    buffer->default_func = NULL;
+    // PyObject *json_data;
+    PyObject *file_obj;
+    PyObject *write_method;
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "OO|ppp(ss)O", (char **) kwlist, &arg, &file_obj, &buffer->format, &buffer->skipkeys, &buffer->allow_nan, &buffer->item_separator, &buffer->key_separator, &buffer->default_func)) {
+        if (!PyErr_Occurred()) PyErr_SetString(PyExc_TypeError, "Failed to parse arguments");
         return NULL;
     }
 
-    write_method = PyObject_GetAttrString(fp, "write");
+    write_method = PyObject_GetAttrString(file_obj, "write");
 
     if (!PyCallable_Check(write_method)) {
         PyErr_SetString(PyExc_TypeError, "'write' method is not callable");
         return NULL;
     }
 
-    argtuple = PyTuple_Pack(1, obj);
 
-    result = pycJSON_Encode(self, argtuple, kwargs);
-    Py_XDECREF(argtuple);
+    
+    if (buffer->default_func && !PyCallable_Check(buffer->default_func)) {
+        PyErr_SetString(PyExc_TypeError, "default_func must be callable");
+        return NULL;
+    }
+    /* create buffer */
+    buffer->buffer = stack_buffer; //(unsigned char *) global_hooks.allocate(default_buffer_size);
+    buffer->length = default_buffer_size;
+    buffer->hooks = global_hooks;
+    if (!print_value(arg, buffer)) {
+        if (!PyErr_Occurred()) PyErr_SetString(PyExc_TypeError, "Failed to encode object");
+        return NULL;
+    }
 
-    if (result == NULL) {
+    update_offset(buffer);
+
+    PyObject *re = PyUnicode_FromString((const char *) buffer->buffer);
+    global_hooks.deallocate_self(buffer);
+    // return re;
+
+    if(re == NULL) {
         Py_XDECREF(write_method);
         return NULL;
     }
 
-    if(!PyUnicode_Check(result)) {
-        Py_XDECREF(result);
+    if(!PyUnicode_Check(re)) {
+        Py_XDECREF(re);
         Py_XDECREF(write_method);
         PyErr_SetString(PyExc_TypeError, "file content must be a string");
         return NULL;
     }
 
-
-    argtuple = PyTuple_Pack(1, result);
+    PyObject *argtuple = PyTuple_Pack(1, re);
     if (argtuple == NULL) {
         Py_XDECREF(write_method);
-        Py_XDECREF(result);
+        Py_XDECREF(re);
         return NULL;
     }
 
-    file_contents = PyObject_CallObject(write_method, argtuple);
+    PyObject *file_contents = PyObject_CallObject(write_method, argtuple);
     Py_XDECREF(argtuple);
 
     if (file_contents == NULL) {
@@ -682,11 +689,71 @@ PyObject *pycJSON_FileEncode(PyObject *self, PyObject *args, PyObject *kwargs) {
     }
 
     Py_XDECREF(write_method);
-    Py_XDECREF(result);
+    Py_XDECREF(re);
     Py_XDECREF(file_contents);
 
     Py_RETURN_NONE;
 }
+
+// PyObject *pycJSON_FileEncode(PyObject *self, PyObject *args, PyObject *kwargs) {
+//     PyObject *json_data;
+//     PyObject *file_obj;
+//     PyObject *file_contents;
+//     PyObject *write_method;
+//     PyObject *argtuple;
+//     PyObject *result;
+
+//     static const char *kwlist[] = {"obj", "fp", NULL};
+//     if (!PyArg_ParseTupleAndKeywords(args, kwargs, "OO|", (char **) kwlist, &json_data, &file_obj)) {
+//         return NULL;
+//     }
+
+//     write_method = PyObject_GetAttrString(file_obj, "write");
+
+//     if (!PyCallable_Check(write_method)) {
+//         PyErr_SetString(PyExc_TypeError, "'write' method is not callable");
+//         return NULL;
+//     }
+
+//     argtuple = PyTuple_Pack(1, json_data);
+
+//     result = pycJSON_Encode(self, argtuple, kwargs);
+//     Py_XDECREF(argtuple);
+
+//     if (result == NULL) {
+//         Py_XDECREF(write_method);
+//         return NULL;
+//     }
+
+//     if(!PyUnicode_Check(result)) {
+//         Py_XDECREF(result);
+//         Py_XDECREF(write_method);
+//         PyErr_SetString(PyExc_TypeError, "file content must be a string");
+//         return NULL;
+//     }
+
+
+//     argtuple = PyTuple_Pack(1, result);
+//     if (argtuple == NULL) {
+//         Py_XDECREF(write_method);
+//         Py_XDECREF(result);
+//         return NULL;
+//     }
+
+//     file_contents = PyObject_CallObject(write_method, argtuple);
+//     Py_XDECREF(argtuple);
+
+//     if (file_contents == NULL) {
+//         Py_XDECREF(write_method);
+//         return NULL;
+//     }
+
+//     Py_XDECREF(write_method);
+//     Py_XDECREF(result);
+//     Py_XDECREF(file_contents);
+
+//     Py_RETURN_NONE;
+// }
 
 static void CJSON_CDECL internal_free(printbuffer *buffer) {
     if (buffer->using_heap) {

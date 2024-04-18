@@ -721,36 +721,27 @@ fail:
     return NULL;
 }
 
-
 PyObject *pycJSON_DecodeFile(PyObject *self, PyObject *args, PyObject *kwargs) {
-    PyObject *fp = NULL;
+    parse_buffer buffer = {0, 0, 0, 0, {0, 0}, 0};
+    PyObject *item = NULL;
+
+    PyObject *file_obj = NULL;
     PyObject *read_method = NULL;
     PyObject *file_contents = NULL;
-    PyObject *result = NULL;
-    PyObject *argtuple = NULL;
-
-
-    if(kwargs != NULL) {
-        fp = PyDict_GetItemString(kwargs, "fp");
-    }
-    if(fp == NULL) {
-        fp = PyTuple_GET_ITEM(args, 0);
-    }
-    else {
-        // PyDict_DelItemString(kwargs, "fp");
+    const char *value;
+    Py_ssize_t buffer_length;
+    static const char *kwlist[] = {"fp", "object_hook", NULL};
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O|O", (char **) kwlist, &file_obj, &buffer.object_hook)) {
+        PyErr_Format(PyExc_TypeError, "Failed to parse JSON: invalid argument, expected str / bytes-like object");
+        goto fail;
     }
 
-    if(fp == NULL) {
-        PyErr_SetString(PyExc_TypeError, "fp argument is required");
-        return NULL;
-    }
-
-    if (!PyObject_HasAttrString(fp, "read")) {
+    if (!PyObject_HasAttrString(file_obj, "read")) {
         PyErr_SetString(PyExc_TypeError, "object must have a 'read' method");
         return NULL;
     }
 
-    read_method = PyObject_GetAttrString(fp, "read");
+    read_method = PyObject_GetAttrString(file_obj, "read");
 
     if (!PyCallable_Check(read_method)) {
         Py_XDECREF(read_method);
@@ -761,26 +752,110 @@ PyObject *pycJSON_DecodeFile(PyObject *self, PyObject *args, PyObject *kwargs) {
     file_contents = PyObject_CallObject(read_method, NULL);
     Py_XDECREF(read_method);
 
-    if (file_contents == NULL) {
-        return NULL;
-    }
-
-    if (!PyUnicode_Check(file_contents)) {
-        Py_XDECREF(file_contents);
+    // set value and buffer_length
+    if (PyUnicode_Check(file_contents)) {
+        value = PyUnicode_AsUTF8(file_contents);
+        buffer_length = strlen(value);
+    } else if (PyBytes_Check(file_contents)) {
+        value = PyBytes_AsString(file_contents);
+        buffer_length = PyBytes_Size(file_contents);
+    } else {
         PyErr_SetString(PyExc_ValueError, "file content must be a string");
         return NULL;
     }
-
-    // file to tuple, then call pycJSON_Decode
-    argtuple = PyTuple_Pack(1, file_contents);
-    result = pycJSON_Decode(self, argtuple, kwargs);
-    
-    Py_XDECREF(argtuple);
     Py_XDECREF(file_contents);
 
-    if (result == NULL) {
-        return NULL;
+
+    if (buffer.object_hook && !PyCallable_Check(buffer.object_hook)) {
+        PyErr_Format(PyExc_TypeError, "Failed to parse JSON: object_hook is not callable");
+        goto fail;
     }
 
-    return result;
+    if (0 == buffer_length) {
+        PyErr_SetString(PyExc_ValueError, "Empty string");
+        goto fail;
+    }
+    buffer.content = (const unsigned char *) value;
+    buffer.length = buffer_length;
+    buffer.offset = 0;
+    buffer.hooks = global_hooks;
+    if (!parse_value(&item, buffer_skip_whitespace(skip_utf8_bom(&buffer)))) {
+        /* parse failure. ep is set. */
+        goto fail;
+    }
+    if (buffer.offset < buffer.length) {
+        PyErr_Format(PyExc_ValueError, "Failed to parse JSON: extra characters at the end\nend position: %d", buffer.offset);
+        goto fail;
+    }
+
+    return item;
+
+fail:
+    if (value != NULL && !PyErr_Occurred()) {
+        Py_ssize_t position = 0;
+
+        if (buffer.offset < buffer.length) {
+            position = buffer.offset;
+        } else if (buffer.length > 0) {
+            position = buffer.length - 1;
+        }
+
+        PyErr_Format(PyExc_ValueError, "Failed to parse JSON (position %d)", position);
+    }
+    return NULL;
 }
+
+// PyObject *pycJSON_DecodeFile(PyObject *self, PyObject *args, PyObject *kwargs) {
+//     PyObject *file_obj = NULL;
+//     PyObject *read_method = NULL;
+//     PyObject *file_contents = NULL;
+//     PyObject *result = NULL;
+//     PyObject *argtuple = NULL;
+
+//     static const char *kwlist[] = {"fp", NULL};
+//     if(!PyArg_ParseTupleAndKeywords(args, kwargs, "O", (char **) kwlist, &file_obj)) {
+//         return NULL;
+//     }
+
+//     // PyObject* pycJSON_Decode_kwargs = PyDict_Copy(kwargs);
+//     // PyDict_DelItemString(pycJSON_Decode_kwargs, "fp");
+
+//     if (!PyObject_HasAttrString(file_obj, "read")) {
+//         PyErr_SetString(PyExc_TypeError, "object must have a 'read' method");
+//         return NULL;
+//     }
+
+//     read_method = PyObject_GetAttrString(file_obj, "read");
+
+//     if (!PyCallable_Check(read_method)) {
+//         Py_XDECREF(read_method);
+//         PyErr_SetString(PyExc_TypeError, "'read' method is not callable");
+//         return NULL;
+//     }
+
+//     file_contents = PyObject_CallObject(read_method, NULL);
+//     Py_XDECREF(read_method);
+
+//     if (file_contents == NULL) {
+//         return NULL;
+//     }
+
+//     if (!PyUnicode_Check(file_contents)) {
+//         Py_XDECREF(file_contents);
+//         PyErr_SetString(PyExc_ValueError, "file content must be a string");
+//         return NULL;
+//     }
+
+//     // file to tuple, then call pycJSON_Decode
+//     argtuple = PyTuple_Pack(1, file_contents);
+//     result = pycJSON_Decode(self, argtuple, kwargs);
+    
+//     Py_XDECREF(argtuple);
+//     Py_XDECREF(file_contents);
+
+//     if (result == NULL) {
+//         return NULL;
+//     }
+
+//     return result;
+// }
