@@ -625,23 +625,23 @@ PyObject *pycJSON_FileEncode(PyObject *self, PyObject *args, PyObject *kwargs) {
     buffer->item_separator = ",";
     buffer->key_separator = ":";
     buffer->default_func = NULL;
-    // PyObject *json_data;
     PyObject *file_obj;
     PyObject *write_method;
+    PyObject *re = NULL;
     if (!PyArg_ParseTupleAndKeywords(args, kwargs, "OO|ppp(ss)O", (char **) kwlist, &arg, &file_obj, &buffer->format, &buffer->skipkeys, &buffer->allow_nan, &buffer->item_separator, &buffer->key_separator, &buffer->default_func)) {
         if (!PyErr_Occurred()) PyErr_SetString(PyExc_TypeError, "Failed to parse arguments");
-        return NULL;
+        goto fail;
     }
 
     write_method = PyObject_GetAttrString(file_obj, "write");
     if (!PyCallable_Check(write_method)) {
         PyErr_SetString(PyExc_TypeError, "'write' method is not callable");
-        return NULL;
+        goto fail;
     }
     
     if (buffer->default_func && !PyCallable_Check(buffer->default_func)) {
         PyErr_SetString(PyExc_TypeError, "default_func must be callable");
-        return NULL;
+        goto fail;
     }
     /* create buffer */
     buffer->buffer = stack_buffer; //(unsigned char *) global_hooks.allocate(default_buffer_size);
@@ -649,45 +649,46 @@ PyObject *pycJSON_FileEncode(PyObject *self, PyObject *args, PyObject *kwargs) {
     buffer->hooks = global_hooks;
     if (!print_value(arg, buffer)) {
         if (!PyErr_Occurred()) PyErr_SetString(PyExc_TypeError, "Failed to encode object");
-        return NULL;
+        goto fail;
     }
 
     update_offset(buffer);
 
-    PyObject *re = PyUnicode_FromString((const char *) buffer->buffer);
+    re = PyUnicode_FromString((const char *) buffer->buffer);
     global_hooks.deallocate_self(buffer);
-    // return re;
 
     if(re == NULL) {
-        Py_XDECREF(write_method);
-        return NULL;
+        goto fail;
     }
 
     if(!PyUnicode_Check(re)) {
-        Py_XDECREF(re);
-        Py_XDECREF(write_method);
         PyErr_SetString(PyExc_TypeError, "file content must be a string");
-        return NULL;
+        goto fail;
     }
 
     PyObject *argtuple = PyTuple_Pack(1, re);
     if (argtuple == NULL) {
-        Py_XDECREF(write_method);
-        Py_XDECREF(re);
-        return NULL;
+        goto fail;
     }
 
     PyObject *file_contents = PyObject_CallObject(write_method, argtuple);
-    Py_XDECREF (argtuple);
-
     if (file_contents == NULL) {
-        Py_XDECREF(write_method);
-        return NULL;
+        goto fail;
     }
 
+    Py_XDECREF(file_contents);
     Py_XDECREF(write_method);
     Py_XDECREF(re);
+    Py_XDECREF(argtuple);
+
+    Py_RETURN_NONE;
+
+fail:
+
     Py_XDECREF(file_contents);
+    Py_XDECREF(write_method);
+    Py_XDECREF(re);
+    Py_XDECREF(argtuple);
 
     Py_RETURN_NONE;
 }
