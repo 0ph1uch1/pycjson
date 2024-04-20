@@ -737,18 +737,16 @@ PyObject *pycJSON_DecodeFile(PyObject *self, PyObject *args, PyObject *kwargs) {
 
     if (!PyObject_HasAttrString(file_obj, "read")) {
         PyErr_SetString(PyExc_TypeError, "object must have a 'read' method");
-        return NULL;
+        goto fail;
     }
 
     read_method = PyObject_GetAttrString(file_obj, "read");
     if (!PyCallable_Check(read_method)) {
-        Py_XDECREF(read_method);
         PyErr_SetString(PyExc_TypeError, "'read' method is not callable");
-        return NULL;
+        goto fail;
     }
 
     file_contents = PyObject_CallObject(read_method, NULL);
-    Py_XDECREF(read_method);
 
     // set value and buffer_length
     if (PyUnicode_Check(file_contents)) {
@@ -759,10 +757,8 @@ PyObject *pycJSON_DecodeFile(PyObject *self, PyObject *args, PyObject *kwargs) {
         buffer_length = PyBytes_Size(file_contents);
     } else {
         PyErr_SetString(PyExc_ValueError, "file content must be a string");
-        return NULL;
+        goto fail;
     }
-    Py_XDECREF(file_contents);
-
 
     if (buffer.object_hook && !PyCallable_Check(buffer.object_hook)) {
         PyErr_Format(PyExc_TypeError, "Failed to parse JSON: object_hook is not callable");
@@ -786,6 +782,9 @@ PyObject *pycJSON_DecodeFile(PyObject *self, PyObject *args, PyObject *kwargs) {
         goto fail;
     }
 
+    Py_XDECREF(file_contents);
+    Py_XDECREF(read_method);
+
     return item;
 
 fail:
@@ -800,5 +799,10 @@ fail:
 
         PyErr_Format(PyExc_ValueError, "Failed to parse JSON (position %d)", position);
     }
+
+    Py_XDECREF(file_contents);
+    Py_XDECREF(read_method);
+    Py_XDECREF(item);
+
     return NULL;
 }
