@@ -40,6 +40,7 @@ typedef struct printbuffer {
 
 // forward declaration
 static bool print_value(PyObject *item, printbuffer *const output_buffer);
+static void* dconv_d2s_ptr = NULL;
 
 /* realloc printbuffer if necessary to have at least "needed" bytes more */
 static unsigned char *ensure(printbuffer *const p, size_t needed) {
@@ -145,12 +146,10 @@ static bool print_number(PyObject *item, printbuffer *const output_buffer) {
             /* Try 15 decimal places of precision to avoid nonsignificant nonzero digits */
             // EDITED: 15 -> 16 for python
             // length = sprintf((char *) number_buffer, "%1.16g", d);
-            static void *d2s = NULL;
-            if (d2s == NULL) {
-                // TODO free it
-                dconv_d2s_init(&d2s, 0, "Infinity", "NaN", 'e', -324, 308, 0, 0);
+            if (dconv_d2s_ptr == NULL) {
+                dconv_d2s_init(&dconv_d2s_ptr, 0, "Infinity", "NaN", 'e', -324, 308, 0, 0);
             }
-            dconv_d2s(d2s, d, (char *) number_buffer, 32, &length);
+            dconv_d2s(dconv_d2s_ptr, d, (char *) number_buffer, 32, &length);
             // /* Check whether the original double can be recovered */
             // if ((sscanf((char *) number_buffer, "%lg", &test) != 1) || !compare_double((double) test, d)) {
             //     /* If not, print with 17 decimal places of precision */
@@ -593,11 +592,11 @@ PyObject *pycJSON_Encode(PyObject *self, PyObject *args, PyObject *kwargs) {
     buffer->default_func = NULL;
     if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O|ppp(ss)O", (char **) kwlist, &arg, &buffer->format, &buffer->skipkeys, &buffer->allow_nan, &buffer->item_separator, &buffer->key_separator, &buffer->default_func)) {
         if (!PyErr_Occurred()) PyErr_SetString(PyExc_TypeError, "Failed to parse arguments");
-        return NULL;
+        goto fail;
     }
     if (buffer->default_func && !PyCallable_Check(buffer->default_func)) {
         PyErr_SetString(PyExc_TypeError, "default_func must be callable");
-        return NULL;
+        goto fail;
     }
     /* create buffer */
     buffer->buffer = stack_buffer; //(unsigned char *) global_hooks.allocate(default_buffer_size);
@@ -605,14 +604,25 @@ PyObject *pycJSON_Encode(PyObject *self, PyObject *args, PyObject *kwargs) {
     buffer->hooks = global_hooks;
     if (!print_value(arg, buffer)) {
         if (!PyErr_Occurred()) PyErr_SetString(PyExc_TypeError, "Failed to encode object");
-        return NULL;
+        goto fail;
     }
 
     update_offset(buffer);
 
     PyObject *re = PyUnicode_FromString((const char *) buffer->buffer);
     global_hooks.deallocate_self(buffer);
+    if(dconv_d2s_ptr != NULL) {
+        dconv_d2s_free(&dconv_d2s_ptr);
+        dconv_d2s_ptr = NULL;
+    }
     return re;
+
+    fail:
+    if(dconv_d2s_ptr != NULL) {
+        dconv_d2s_free(&dconv_d2s_ptr);
+        dconv_d2s_ptr = NULL;
+    }
+    return NULL;
 }
 
 PyObject *pycJSON_FileEncode(PyObject *self, PyObject *args, PyObject *kwargs) {

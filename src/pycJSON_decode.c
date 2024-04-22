@@ -19,6 +19,7 @@ typedef struct internal_hooks {
 } internal_hooks;
 
 static internal_hooks global_hooks = {PyMem_Malloc, PyMem_Free};
+static void* dconv_s2d_ptr = NULL;
 
 typedef struct
 {
@@ -493,9 +494,7 @@ loop_end:
     if (dec) {
         // const double temp = PyOS_string_to_double((const char *) starting_point, (char **) &after_end, PyExc_OverflowError);
         // if (PyErr_Occurred()) return false;
-        static void *dconv_s2d_ptr;
         if (dconv_s2d_ptr == NULL) {
-            // TODO free it
             dconv_s2d_init(&dconv_s2d_ptr, 0, 0.0, 0.0, "inf", "nan");
         }
         int processed_characters_count = 0;
@@ -712,7 +711,10 @@ PyObject *pycJSON_Decode(PyObject *self, PyObject *args, PyObject *kwargs) {
         PyErr_Format(PyExc_ValueError, "Failed to parse JSON: extra characters at the end\nend position: %d", buffer.offset);
         goto fail;
     }
-
+    if(dconv_s2d_ptr != NULL) {
+        dconv_s2d_free(&dconv_s2d_ptr);
+        dconv_s2d_ptr = NULL;
+    }
     return item;
 
 fail:
@@ -726,6 +728,10 @@ fail:
         }
 
         PyErr_Format(PyExc_ValueError, "Failed to parse JSON (position %d)", position);
+    }
+    if(dconv_s2d_ptr != NULL) {
+        dconv_s2d_free(&dconv_s2d_ptr);
+        dconv_s2d_ptr = NULL;
     }
     return NULL;
 }
