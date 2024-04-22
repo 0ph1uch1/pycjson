@@ -3,7 +3,6 @@ import platform
 
 from setuptools import Extension, setup
 
-
 if platform.system() == "Linux":
     strip_flags = ["-Wl,--strip-all"]
 else:
@@ -20,6 +19,8 @@ def find_src():
             elif file.endswith(".h"):
                 if file != "version_template.h":
                     headers.append(os.path.join(root, file))
+    srcs.append(os.path.abspath("./deps/double-conversion.cpp"))
+    headers.append(os.path.abspath("./deps/double-conversion.h"))
     return srcs, headers
 
 
@@ -28,7 +29,7 @@ srcs, headers = find_src()
 module1 = Extension(
     "cjson",
     sources=srcs,
-    include_dirs=["./src"],
+    include_dirs=["./src", "./deps"],
     extra_compile_args=["-D_GNU_SOURCE"],
     extra_link_args=["-lstdc++", "-lm"] + strip_flags,
 )
