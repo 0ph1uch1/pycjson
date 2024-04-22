@@ -438,6 +438,7 @@ fail:
 }
 
 /* Parse the input text to generate a number, and populate the result into item. */
+/* Note: it will NOT throw overflow error when double overflow, it will return inf instead. */
 static bool parse_number(PyObject **item, parse_buffer *const input_buffer) {
     assert(item);
     unsigned char *after_end = NULL;
