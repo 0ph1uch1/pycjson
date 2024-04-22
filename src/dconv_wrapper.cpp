@@ -28,7 +28,7 @@ namespace double_conversion {
 
     void dconv_d2s_free(void **d2s) {
         delete static_cast<DoubleToStringConverter *>(*d2s);
-        *d2s = nullptr;
+        *d2s = NULL;
     }
 
     void dconv_s2d_init(void **s2d, int flags, double empty_string_value,
@@ -44,7 +44,7 @@ namespace double_conversion {
 
     void dconv_s2d_free(void **s2d) {
         delete static_cast<StringToDoubleConverter *>(*s2d);
-        *s2d = nullptr;
+        *s2d = NULL;
     }
     }
 } // namespace double_conversion

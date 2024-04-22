@@ -493,7 +493,7 @@ loop_end:
         // const double temp = PyOS_string_to_double((const char *) starting_point, (char **) &after_end, PyExc_OverflowError);
         // if (PyErr_Occurred()) return false;
         if (dconv_s2d_ptr == NULL) {
-            dconv_s2d_init(&dconv_s2d_ptr, ALLOW_LEADING_SPACES, 0.0, Py_NAN, "Infinity", "NaN");
+            dconv_s2d_init(&dconv_s2d_ptr, NO_FLAGS, 0.0, Py_NAN, "Infinity", "NaN");
         }
         int processed_characters_count = 0;
         const double temp = dconv_s2d(dconv_s2d_ptr, (const char *) starting_point, i, &processed_characters_count);
