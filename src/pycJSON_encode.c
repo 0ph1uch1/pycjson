@@ -657,9 +657,6 @@ PyObject *pycJSON_FileEncode(PyObject *self, PyObject *args, PyObject *kwargs) {
     re = PyUnicode_FromString((const char *) buffer->buffer);
     global_hooks.deallocate_self(buffer);
 
-    if(re == NULL) {
-        goto fail;
-    }
 
     if(!PyUnicode_Check(re)) {
         PyErr_SetString(PyExc_TypeError, "file content must be a string");
@@ -684,11 +681,8 @@ PyObject *pycJSON_FileEncode(PyObject *self, PyObject *args, PyObject *kwargs) {
     Py_RETURN_NONE;
 
 fail:
-
-    Py_XDECREF(file_contents);
     Py_XDECREF(write_method);
     Py_XDECREF(re);
-    Py_XDECREF(argtuple);
 
     Py_RETURN_NONE;
 }
