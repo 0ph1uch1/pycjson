@@ -1,4 +1,5 @@
 // From ujson https://github.com/ultrajson/ultrajson/blob/main/lib/dconv_wrapper.cc
+#include "dconv_wrapper.h"
 #include "double-conversion.hpp"
 
 namespace double_conversion {
@@ -27,7 +28,7 @@ namespace double_conversion {
 
     void dconv_d2s_free(void **d2s) {
         delete static_cast<DoubleToStringConverter *>(*d2s);
-        *d2s = NULL;
+        *d2s = nullptr;
     }
 
     void dconv_s2d_init(void **s2d, int flags, double empty_string_value,
@@ -43,7 +44,7 @@ namespace double_conversion {
 
     void dconv_s2d_free(void **s2d) {
         delete static_cast<StringToDoubleConverter *>(*s2d);
-        *s2d = NULL;
+        *s2d = nullptr;
     }
     }
 } // namespace double_conversion

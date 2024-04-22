@@ -40,7 +40,7 @@ typedef struct printbuffer {
 
 // forward declaration
 static bool print_value(PyObject *item, printbuffer *const output_buffer);
-static void* dconv_d2s_ptr = NULL;
+static void *dconv_d2s_ptr = NULL;
 
 /* realloc printbuffer if necessary to have at least "needed" bytes more */
 static unsigned char *ensure(printbuffer *const p, size_t needed) {
@@ -147,7 +147,7 @@ static bool print_number(PyObject *item, printbuffer *const output_buffer) {
             // EDITED: 15 -> 16 for python
             // length = sprintf((char *) number_buffer, "%1.16g", d);
             if (dconv_d2s_ptr == NULL) {
-                dconv_d2s_init(&dconv_d2s_ptr, 0, "Infinity", "NaN", 'e', -324, 308, 0, 0);
+                dconv_d2s_init(&dconv_d2s_ptr, NO_FLAGS, "Infinity", "NaN", 'e', -324, 308, 0, 0);
             }
             dconv_d2s(dconv_d2s_ptr, d, (char *) number_buffer, 32, &length);
             // /* Check whether the original double can be recovered */
@@ -611,16 +611,14 @@ PyObject *pycJSON_Encode(PyObject *self, PyObject *args, PyObject *kwargs) {
 
     PyObject *re = PyUnicode_FromString((const char *) buffer->buffer);
     global_hooks.deallocate_self(buffer);
-    if(dconv_d2s_ptr != NULL) {
+    if (dconv_d2s_ptr != NULL) {
         dconv_d2s_free(&dconv_d2s_ptr);
-        dconv_d2s_ptr = NULL;
     }
     return re;
 
-    fail:
-    if(dconv_d2s_ptr != NULL) {
+fail:
+    if (dconv_d2s_ptr != NULL) {
         dconv_d2s_free(&dconv_d2s_ptr);
-        dconv_d2s_ptr = NULL;
     }
     return NULL;
 }
