@@ -1,8 +1,9 @@
+#include "dconv_wrapper.h"
 #include "pycJSON.h"
 #include <Python.h>
-#include <float.h>
 #include <math.h>
 #include <stdbool.h>
+
 #define cjson_min(a, b) (((a) < (b)) ? (a) : (b))
 
 #define CJSON_PRINTBUFFER_MAX_STACK_SIZE (1024 * 256)
@@ -143,8 +144,13 @@ static bool print_number(PyObject *item, printbuffer *const output_buffer) {
         } else {
             /* Try 15 decimal places of precision to avoid nonsignificant nonzero digits */
             // EDITED: 15 -> 16 for python
-            length = sprintf((char *) number_buffer, "%1.16g", d);
-
+            // length = sprintf((char *) number_buffer, "%1.16g", d);
+            static void *d2s = NULL;
+            if (d2s == NULL) {
+                // TODO free it
+                dconv_d2s_init(&d2s, 0, "Infinity", "NaN", 'e', -324, 308, 0, 0);
+            }
+            dconv_d2s(d2s, d, (char *) number_buffer, 32, &length);
             // /* Check whether the original double can be recovered */
             // if ((sscanf((char *) number_buffer, "%lg", &test) != 1) || !compare_double((double) test, d)) {
             //     /* If not, print with 17 decimal places of precision */

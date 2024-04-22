@@ -1,5 +1,6 @@
 #include "pycJSON.h"
 #define PY_SSIZE_T_CLEAN
+#include "dconv_wrapper.h"
 #include <Python.h>
 #include <math.h>
 #include <stdbool.h>
@@ -457,8 +458,8 @@ static bool parse_number(PyObject **item, parse_buffer *const input_buffer) {
     for (i = 0; can_access_at_index(input_buffer, i); i++) {
         switch (buffer_at_offset(input_buffer)[i]) {
             case '.':
-            case 'e':
             case 'E':
+            case 'e':
                 dec = true;
             case '0':
             case '1':
@@ -490,8 +491,16 @@ loop_end:
     }
 
     if (dec) {
-        const double temp = PyOS_string_to_double((const char *) starting_point, (char **) &after_end, PyExc_OverflowError);
-        if (PyErr_Occurred()) return false;
+        // const double temp = PyOS_string_to_double((const char *) starting_point, (char **) &after_end, PyExc_OverflowError);
+        // if (PyErr_Occurred()) return false;
+        static void *dconv_s2d_ptr;
+        if (dconv_s2d_ptr == NULL) {
+            // TODO free it
+            dconv_s2d_init(&dconv_s2d_ptr, 0, 0.0, 0.0, "inf", "nan");
+        }
+        int processed_characters_count = 0;
+        const double temp = dconv_s2d(dconv_s2d_ptr, (const char *) starting_point, i, &processed_characters_count);
+        after_end = (unsigned char *) (starting_point + processed_characters_count);
         *item = PyFloat_FromDouble(temp);
     } else
         *item = PyLong_FromString((const char *) starting_point, (char **) &after_end, 10);

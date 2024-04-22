@@ -1,0 +1,30 @@
+{
+  "baseDirectory": "./",
+  "sources": [
+    "./deps/double-conversion/double-conversion"
+  ],
+  "headers": [
+    "./deps/double-conversion/double-conversion"
+  ],
+  "sourceDest": "./deps/double-conversion.cpp",
+  "headerDest": "./deps/double-conversion.hpp",
+  "prologue": "buildScripts/prologue",
+  "includeDirectory": [
+    "./deps/double-conversion/double-conversion"
+  ],
+  "removeTwoSlashComments": true,
+  "extension": {
+    "source": [
+      ".c",
+      ".cpp",
+      ".cxx",
+      ".cc"
+    ],
+    "header": [
+      ".h",
+      ".hpp",
+      ".hxx",
+      ".inl"
+    ]
+  }
+}
