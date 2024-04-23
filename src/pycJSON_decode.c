@@ -1,5 +1,6 @@
 #include "pycJSON.h"
 #define PY_SSIZE_T_CLEAN
+#include "dconv_wrapper.h"
 #include <Python.h>
 #include <math.h>
 #include <stdbool.h>
@@ -26,7 +27,6 @@ typedef struct
     Py_ssize_t offset;
     Py_ssize_t depth; /* How deeply nested (in arrays/objects) is the input at the current offset. */
     internal_hooks hooks;
-
     /* kwargs */
     PyObject *object_hook;
 } parse_buffer;
@@ -37,7 +37,6 @@ static bool parse_value(PyObject **item, parse_buffer *const input_buffer);
 static unsigned parse_hex4(const unsigned char *const input) {
     unsigned int h = 0;
     Py_ssize_t i = 0;
-
     for (i = 0; i < 4; i++) {
         /* parse digit */
         if ((input[i] >= '0') && (input[i] <= '9')) {
@@ -438,6 +437,7 @@ fail:
 }
 
 /* Parse the input text to generate a number, and populate the result into item. */
+/* Note: it will NOT throw overflow error when double overflow, it will return inf instead. */
 static bool parse_number(PyObject **item, parse_buffer *const input_buffer) {
     assert(item);
     unsigned char *after_end = NULL;
@@ -457,8 +457,8 @@ static bool parse_number(PyObject **item, parse_buffer *const input_buffer) {
     for (i = 0; can_access_at_index(input_buffer, i); i++) {
         switch (buffer_at_offset(input_buffer)[i]) {
             case '.':
-            case 'e':
             case 'E':
+            case 'e':
                 dec = true;
             case '0':
             case '1':
@@ -490,21 +490,31 @@ loop_end:
     }
 
     if (dec) {
-        const double temp = PyOS_string_to_double((const char *) starting_point, (char **) &after_end, PyExc_OverflowError);
-        if (PyErr_Occurred()) return false;
+        // const double temp = PyOS_string_to_double((const char *) starting_point, (char **) &after_end, PyExc_OverflowError);
+        // if (PyErr_Occurred()) return false;
+        int processed_characters_count = 0;
+        const double temp = dconv_s2d((const char *) starting_point, i, &processed_characters_count);
+        if (i != processed_characters_count) {
+            PyErr_Format(PyExc_ValueError, "Failed to parse number: invalid number, only can parse (%d/%d)\nposition: %d", processed_characters_count, i, input_buffer->offset);
+            goto fail;
+        }
+        after_end = (unsigned char *) (starting_point + processed_characters_count);
         *item = PyFloat_FromDouble(temp);
     } else
         *item = PyLong_FromString((const char *) starting_point, (char **) &after_end, 10);
     if (starting_point == after_end || NULL == *item) {
         PyErr_Format(PyExc_ValueError, "Failed to parse number: invalid number\nposition: %d", input_buffer->offset);
-        *((char *) (buffer_at_offset(input_buffer) + i)) = old_ending;
-        return false;
+        goto fail;
     }
 
     // restore the old ending, if it was overwritten, otherwise it will set null terminator again
     *((char *) (buffer_at_offset(input_buffer) + i)) = old_ending;
     input_buffer->offset += (Py_ssize_t) (after_end - starting_point);
     return true;
+
+fail:
+    *((char *) (buffer_at_offset(input_buffer) + i)) = old_ending;
+    return false;
 }
 
 /* Build an object from the text. */
@@ -703,7 +713,6 @@ PyObject *pycJSON_Decode(PyObject *self, PyObject *args, PyObject *kwargs) {
         PyErr_Format(PyExc_ValueError, "Failed to parse JSON: extra characters at the end\nend position: %d", buffer.offset);
         goto fail;
     }
-
     return item;
 
 fail:
