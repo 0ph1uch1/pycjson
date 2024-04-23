@@ -8,8 +8,6 @@ PyObject *pycJSON_Decode(PyObject *self, PyObject *args, PyObject *kwargs);
 PyObject *pycJSON_FileEncode(PyObject *self, PyObject *args, PyObject *kwargs);
 PyObject *pycJSON_DecodeFile(PyObject *self, PyObject *args, PyObject *kwargs);
 
-PyObject *JSONDecodeError = NULL;
-
 static PyMethodDef pycJSON_Methods[] = {
         {"encode", (PyCFunction) pycJSON_Encode, METH_VARARGS | METH_KEYWORDS, "Converts arbitrary object recursively into JSON. "},
         {"decode", (PyCFunction) pycJSON_Decode, METH_VARARGS | METH_KEYWORDS, "Converts JSON as string to dict object structure."},
@@ -23,16 +21,12 @@ static PyMethodDef pycJSON_Methods[] = {
 static int module_traverse(PyObject *m, visitproc visit, void *arg);
 static int module_clear(PyObject *m);
 static void module_free(void *m);
-typedef struct
-{
-    PyObject *type_decimal;
-} modulestate;
 
 static struct PyModuleDef moduledef = {
         PyModuleDef_HEAD_INIT,
         "cjson",
         0,                   /* m_doc */
-        sizeof(modulestate), /* m_size */
+        0,               /* m_size */
         pycJSON_Methods,     /* m_methods */
         NULL,                /* m_slots */
         module_traverse,     /* m_traverse */
@@ -41,12 +35,10 @@ static struct PyModuleDef moduledef = {
 };
 
 static int module_traverse(PyObject *m, visitproc visit, void *arg) {
-    Py_VISIT(MODULE_STATE(m)->type_decimal);
     return 0;
 }
 
 static int module_clear(PyObject *m) {
-    Py_CLEAR(MODULE_STATE(m)->type_decimal);
     return 0;
 }
 
@@ -71,26 +63,6 @@ PyMODINIT_FUNC PyInit_cjson(void) {
     }
 
     PyModule_AddStringConstant(module, "__version__", PYCJSON_VERSION);
-
-#ifndef PYPY_VERSION
-    PyObject *mod_decimal = PyImport_ImportModule("decimal");
-    if (mod_decimal) {
-        PyObject *type_decimal = PyObject_GetAttrString(mod_decimal, "Decimal");
-        assert(type_decimal != NULL);
-        MODULE_STATE(module)->type_decimal = type_decimal;
-        Py_DECREF(mod_decimal);
-    } else
-        PyErr_Clear();
-#endif
-
-    JSONDecodeError = PyErr_NewException("cjson.JSONDecodeError", PyExc_ValueError, NULL);
-    Py_XINCREF(JSONDecodeError);
-    if (PyModule_AddObject(module, "JSONDecodeError", JSONDecodeError) < 0) {
-        Py_XDECREF(JSONDecodeError);
-        Py_CLEAR(JSONDecodeError);
-        Py_DECREF(module);
-        return NULL;
-    }
 
     return module;
 }
