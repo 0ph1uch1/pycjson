@@ -6,7 +6,7 @@ from setuptools import Extension, setup
 CPPSTD = "c++20"
 CSTD = "c2x"
 extra_compile_args = ["-D_GNU_SOURCE"]
-if platform.system() == "Linux":
+if platform.system() == "Linux" or platform.system() == "Darwin":
     strip_flags = ["-Wl,--strip-all"]
     extra_compile_args += [f"-std={CPPSTD}", f"-std={CSTD}"]
 else:
