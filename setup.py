@@ -3,10 +3,15 @@ import platform
 
 from setuptools import Extension, setup
 
+CPPSTD = "c++20"
+CSTD = "c2x"
+extra_compile_args = ["-D_GNU_SOURCE"]
 if platform.system() == "Linux":
     strip_flags = ["-Wl,--strip-all"]
+    extra_compile_args += [f"-std={CPPSTD}", f"-std={CSTD}"]
 else:
     strip_flags = []
+    extra_compile_args += [f"/std:{CPPSTD}", f"/std:{CSTD}"]
 
 
 def find_src():
@@ -30,13 +35,12 @@ module1 = Extension(
     "cjson",
     sources=srcs,
     include_dirs=["./src", "./deps"],
-    extra_compile_args=["-D_GNU_SOURCE"],
+    extra_compile_args=extra_compile_args,
     extra_link_args=["-lstdc++", "-lm"] + strip_flags,
 )
 
 with open("src/version_template.h", encoding='utf-8') as f:
     version_template = f.read()
-
 
 setup(
     ext_modules=[module1],
