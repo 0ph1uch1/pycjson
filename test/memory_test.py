@@ -168,7 +168,7 @@ class TestMemory(unittest.TestCase):
         # should not increase more than 100 bytes
         self.assertGreaterEqual(100, mem_diff)
         
-    def test_dump_leak_RefCount(self):
+    def test_dump_leak_refcount(self):
         """
         Developed by ESN, an Electronic Arts Inc. studio.
         Copyright (c) 2014, Electronic Arts Inc.
@@ -223,7 +223,7 @@ class TestMemory(unittest.TestCase):
                             print(f"Ref count of {o!r} went from {before} to {after}")
                     self.assertTrue(False, "Ref count changed")
                     
-    def test_dump_leak_MemPeak(self):
+    def test_dump_leak(self):
         if hasattr(sys, "pypy_version_info"):
             # skip PyPy
             return
