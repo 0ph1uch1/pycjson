@@ -33,6 +33,7 @@ if __name__ == "__main__":
                 print(f"Skipping {name}")
                 continue
             module = importlib.import_module(file[:-3])
+            print(f"Adding   {name}")
             for name, obj in module.__dict__.items():
                 if isinstance(obj, type) and issubclass(obj, unittest.TestCase):
                     unittest_classes.append(obj)
