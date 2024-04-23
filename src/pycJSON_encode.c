@@ -665,11 +665,13 @@ PyObject *pycJSON_FileEncode(PyObject *self, PyObject *args, PyObject *kwargs) {
 
     PyObject *argtuple = PyTuple_Pack(1, re);
     if (argtuple == NULL) {
+        PyErr_SetString(PyErr_SetString, "Failed to pack the result, required for writing to the file");
         goto fail;
     }
 
     PyObject *file_contents = PyObject_CallObject(write_method, argtuple);
     if (file_contents == NULL) {
+        PyErr_SetString(PyErr_SetString, "Failed to write result to the file");
         goto fail;
     }
 
@@ -684,7 +686,7 @@ fail:
     Py_XDECREF(write_method);
     Py_XDECREF(re);
 
-    Py_RETURN_NONE;
+    return NULL;
 }
 
 static void CJSON_CDECL internal_free(printbuffer *buffer) {
