@@ -85,7 +85,7 @@ int get_unicode_value(const char *str, Py_UCS4 *re) {
 
 bool str2unicode_1byte(PyObject **re, const char *str, const long alloc, const long num) {
     typedef Py_UCS1 t;
-    *re = PyUnicode_New(alloc - 1, 0xFF);
+    *re = PyUnicode_New(alloc + 1, 0xFF); // TODO must be at least alloc + 1 idk why
     if (*re == NULL) {
         PyErr_Format(PyExc_MemoryError, "Failed to parse string: allocation failure");
         return false;
