@@ -158,6 +158,7 @@ static bool parse_string(PyObject **item, parse_buffer *const input_buffer) {
                 int tmp_len = get_utf8_type(unicode_value);
                 input_end += skip - 1;
                 max_len = max_len < tmp_len ? tmp_len : max_len;
+                skipped_bytes += tmp_len - 1;
             }
             /* is escape sequence */
             if (input_end[0] == '\\') {
@@ -175,6 +176,7 @@ static bool parse_string(PyObject **item, parse_buffer *const input_buffer) {
                     const int tmp_len = get_utf8_type(parse_hex4(input_end + 1));
                     max_len = max_len < tmp_len ? tmp_len : max_len;
                     input_end += 4 - 1;
+                    skipped_bytes += 4 - 1;
                 }
                 skipped_bytes++;
                 input_end++;
