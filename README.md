@@ -1,5 +1,5 @@
 # py-cjson
-py-cjson is a python3 json library, powered by algorithms from cJSON library, providing JSON relevant functionality.  It is designed to offer a familiar interface to those who are accustomed to the built-in Python json module, while providing an improved speed and efficiency for JSON encoding and decoding.
+py-cjson is a python3 json library, powered by algorithms from cJSON library, providing JSON relevant functionality. It is designed to offer a similar interface to those who are accustomed to the built-in Python json module, while providing an improved speed for JSON encoding and decoding.
 
 ## Installation
 To install py-cjson, follow these steps:
