@@ -108,7 +108,7 @@ static bool print_number(PyObject *item, printbuffer *const output_buffer) {
 
     int length = 0;
     size_t i = 0;
-    unsigned char number_buffer[32] = {0}; /* temporary buffer to print the number into */
+    unsigned char number_buffer[64] = {0}; /* temporary buffer to print the number into */
     unsigned char decimal_point = get_decimal_point();
 
     if (output_buffer == NULL) {
@@ -145,7 +145,7 @@ static bool print_number(PyObject *item, printbuffer *const output_buffer) {
             /* Try 15 decimal places of precision to avoid nonsignificant nonzero digits */
             // EDITED: 15 -> 16 for python
             // length = sprintf((char *) number_buffer, "%1.16g", d);
-            dconv_d2s(d, (char *) number_buffer, 32, &length);
+            dconv_d2s(d, (char *) number_buffer, 63, &length);
             // /* Check whether the original double can be recovered */
             // if ((sscanf((char *) number_buffer, "%lg", &test) != 1) || !compare_double((double) test, d)) {
             //     /* If not, print with 17 decimal places of precision */
