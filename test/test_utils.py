@@ -53,4 +53,7 @@ def check_obj_same(self: "unittest.TestCase", a, b):
             return
         _num_check(self, a, b)
         return
+    if isinstance(a, str):
+        self.assertEqual(a.encode(), b.encode(), "str mismatch")
+        return
     self.assertEqual(a, b, "mismatch")
