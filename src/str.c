@@ -90,7 +90,6 @@ bool str2unicode_1byte(PyObject **re, const char *str, const long alloc, const l
             *data++ = str[i];
         real_len++;
     }
-    *data = '\x00';
     PyUnicode_Resize(re, real_len);
     return true;
 }
@@ -122,7 +121,6 @@ bool str2unicode_2byte(PyObject **re, const char *str, const long alloc, const l
         }
         real_len++;
     }
-    *data = '\x00';
     PyUnicode_Resize(re, real_len);
     return true;
 }
@@ -152,7 +150,6 @@ bool str2unicode_3byte(PyObject **re, const char *str, const long alloc, const l
             GET_UNICODE_VALUE
         }
     }
-    *data = '\x00';
     PyUnicode_Resize(re, data - (t *) ((PyCompactUnicodeObject *) *re + 1));
     return true;
 }
@@ -184,7 +181,6 @@ bool str2unicode_4byte(PyObject **re, const char *str, const long alloc, const l
         }
         real_len++;
     }
-    *data = '\x00';
     PyUnicode_Resize(re, real_len);
     return true;
 }
