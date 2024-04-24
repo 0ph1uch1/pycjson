@@ -49,29 +49,48 @@ static unsigned parse_hex4(const unsigned char *const input) {
     return h;
 }
 
-#define GET_UNICODE_VALUE                                                                                                                  \
-    assert(!(str[i] & 0b10000000 && !str[i] & 0b01000000));                                                                                \
-    if (str[i] & 0b10000000) {                                                                                                             \
-        if (str[i] & 0b00100000) {                                                                                                         \
-            if (str[i] & 0b00010000) {                                                                                                     \
-                *data++ = ((str[i++] & 0b111) << 18) + ((str[i++] & 0b111111) << 12) + ((str[i++] & 0b111111) << 6) + (str[i] & 0b111111); \
-            } else {                                                                                                                       \
-                *data++ = ((str[i++] & 0b1111) << 12) + ((str[i++] & 0b111111) << 6) + (str[i] & 0b111111);                                \
-            }                                                                                                                              \
-        } else {                                                                                                                           \
-            *data++ = ((str[i++] & 0b11111) << 6) + (str[i] & 0b111111);                                                                   \
-        }                                                                                                                                  \
-    } else {                                                                                                                               \
-        *data++ = (str[i] & 0b1111111);                                                                                                    \
+int get_utf8_type(uint32_t unciode_value) {
+    if (unciode_value <= 0xFF) { // should be 0x7F
+        return 1;
+    } else if (unciode_value <= 0xFFFF) { // should be 0x7FF
+        return 2;
+    } else { // no 3 bytes utf8 in python
+        return 4;
     }
+}
+
+int get_unicode_value(const char *str, Py_UCS4 *re) {
+    if (str[0] & 0b10000000 && !str[0] & 0b01000000) {
+        // Continue bytes should be skipped.
+        return 0;
+    }
+    if (str[0] & 0b10000000) {
+        if (str[0] & 0b00100000) {
+            if (str[0] & 0b00010000) {
+                *re = ((str[0] & 0b111) << 18) + ((str[1] & 0b111111) << 12) + ((str[2] & 0b111111) << 6) + (str[3] & 0b111111);
+                return 4;
+            } else {
+                *re = ((str[0] & 0b1111) << 12) + ((str[1] & 0b111111) << 6) + (str[2] & 0b111111);
+                return 3;
+            }
+        } else {
+            *re = ((str[0] & 0b11111) << 6) + (str[1] & 0b111111);
+            return 2;
+        }
+    } else {
+        *re = str[0] & 0b1111111;
+        return 1;
+    }
+}
 
 bool str2unicode_1byte(PyObject **re, const char *str, const long alloc, const long num) {
+    typedef Py_UCS1 t;
     *re = PyUnicode_New(alloc - 1, 0xFF);
     if (*re == NULL) {
         PyErr_Format(PyExc_MemoryError, "Failed to parse string: allocation failure");
         return false;
     }
-    char *data = (char *) ((PyCompactUnicodeObject *) *re + 1);
+    t *data = (t *) ((PyCompactUnicodeObject *) *re + 1);
     long real_len = 0;
     for (int i = 0; i < num - 1; i++) {
         if (str[i] == '\\') {
@@ -79,15 +98,21 @@ bool str2unicode_1byte(PyObject **re, const char *str, const long alloc, const l
                 PARSE_STRING_CHAR_MATCHER(str[i], data, char)
                 case 'u':
                 case 'U':
-                    *data++ = (char) parse_hex4((unsigned char *) (str + i + 1));
+                    *data++ = (t) parse_hex4((unsigned char *) (str + i + 1));
                     i += 4;
                     break;
                 default:
                     PyErr_Format(PyExc_ValueError, "Failed to parse string: invalid escape sequence(%d)\nposition: %d", str[i], i);
                     return false;
             }
-        } else
-            *data++ = str[i];
+        } else {
+            const int skip = get_unicode_value(str + i, data++);
+            if (skip == 0) {
+                PyErr_SetString(PyExc_ValueError, "Invalid utf8 string.");
+                return false;
+            }
+            i += skip - 1;
+        }
         real_len++;
     }
     PyUnicode_Resize(re, real_len);
@@ -117,40 +142,16 @@ bool str2unicode_2byte(PyObject **re, const char *str, const long alloc, const l
                     return false;
             }
         } else {
-            GET_UNICODE_VALUE
+            const int skip = get_unicode_value(str + i, data++);
+            if (skip == 0) {
+                PyErr_SetString(PyExc_ValueError, "Invalid utf8 string.");
+                return false;
+            }
+            i += skip - 1;
         }
         real_len++;
     }
     PyUnicode_Resize(re, real_len);
-    return true;
-}
-
-bool str2unicode_3byte(PyObject **re, const char *str, const long alloc, const long num) {
-    typedef Py_UCS4 t;
-    *re = PyUnicode_New(alloc - 1, 0x10ffff);
-    if (*re == NULL) {
-        PyErr_Format(PyExc_MemoryError, "Failed to parse string: allocation failure");
-        return false;
-    }
-    t *data = (t *) ((PyCompactUnicodeObject *) *re + 1);
-    for (int i = 0; i < num - 1; i++) {
-        if (str[i] == '\\') {
-            switch (str[++i]) {
-                PARSE_STRING_CHAR_MATCHER(str[i], data, t)
-                case 'u':
-                case 'U':
-                    *data++ = (t) parse_hex4((unsigned char *) (str + i + 1));
-                    i += 4;
-                    break;
-                default:
-                    PyErr_Format(PyExc_ValueError, "Failed to parse string: invalid escape sequence(%d)\nposition: %d", str[i], i);
-                    return false;
-            }
-        } else {
-            GET_UNICODE_VALUE
-        }
-    }
-    PyUnicode_Resize(re, data - (t *) ((PyCompactUnicodeObject *) *re + 1));
     return true;
 }
 
@@ -177,7 +178,12 @@ bool str2unicode_4byte(PyObject **re, const char *str, const long alloc, const l
                     return false;
             }
         } else {
-            GET_UNICODE_VALUE
+            const int skip = get_unicode_value(str + i, data++);
+            if (skip == 0) {
+                PyErr_SetString(PyExc_ValueError, "Invalid utf8 string.");
+                return false;
+            }
+            i += skip - 1;
         }
         real_len++;
     }

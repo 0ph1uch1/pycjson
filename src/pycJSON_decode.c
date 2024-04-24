@@ -62,107 +62,6 @@ static unsigned parse_hex4(const unsigned char *const input) {
     return h;
 }
 
-/* converts a UTF-16 literal to UTF-8
- * A literal can be one or two sequences of the form \uXXXX */
-static unsigned char utf16_literal_to_utf8(const unsigned char *const input_pointer, const unsigned char *const input_end, unsigned char **output_pointer) {
-    assert(output_pointer);
-    long unsigned int codepoint = 0;
-    unsigned int first_code = 0;
-    const unsigned char *first_sequence = input_pointer;
-    unsigned char utf8_length = 0;
-    unsigned char utf8_position = 0;
-    unsigned char sequence_length = 0;
-    unsigned char first_byte_mark = 0;
-
-    if ((input_end - first_sequence) < 6) {
-        /* input ends unexpectedly */
-        goto fail;
-    }
-
-    /* get the first utf16 sequence */
-    first_code = parse_hex4(first_sequence + 2);
-
-    /* check that the code is valid */
-    if (((first_code >= 0xDC00) && (first_code <= 0xDFFF))) {
-        goto fail;
-    }
-
-    /* UTF16 surrogate pair */
-    if ((first_code >= 0xD800) && (first_code <= 0xDBFF)) {
-        const unsigned char *second_sequence = first_sequence + 6;
-        unsigned int second_code = 0;
-        sequence_length = 12; /* \uXXXX\uXXXX */
-
-        if ((input_end - second_sequence) < 6) {
-            /* input ends unexpectedly */
-            goto fail;
-        }
-
-        if ((second_sequence[0] != '\\') || (second_sequence[1] != 'u')) {
-            /* missing second half of the surrogate pair */
-            goto fail;
-        }
-
-        /* get the second utf16 sequence */
-        second_code = parse_hex4(second_sequence + 2);
-        /* check that the code is valid */
-        if ((second_code < 0xDC00) || (second_code > 0xDFFF)) {
-            /* invalid second half of the surrogate pair */
-            goto fail;
-        }
-
-
-        /* calculate the unicode codepoint from the surrogate pair */
-        codepoint = 0x10000 + (((first_code & 0x3FF) << 10) | (second_code & 0x3FF));
-    } else {
-        sequence_length = 6; /* \uXXXX */
-        codepoint = first_code;
-    }
-
-    /* encode as UTF-8
-     * takes at maximum 4 bytes to encode:
-     * 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx */
-    if (codepoint < 0x80) {
-        /* normal ascii, encoding 0xxxxxxx */
-        utf8_length = 1;
-    } else if (codepoint < 0x800) {
-        /* two bytes, encoding 110xxxxx 10xxxxxx */
-        utf8_length = 2;
-        first_byte_mark = 0xC0; /* 11000000 */
-    } else if (codepoint < 0x10000) {
-        /* three bytes, encoding 1110xxxx 10xxxxxx 10xxxxxx */
-        utf8_length = 3;
-        first_byte_mark = 0xE0; /* 11100000 */
-    } else if (codepoint <= 0x10FFFF) {
-        /* four bytes, encoding 1110xxxx 10xxxxxx 10xxxxxx 10xxxxxx */
-        utf8_length = 4;
-        first_byte_mark = 0xF0; /* 11110000 */
-    } else {
-        /* invalid unicode codepoint */
-        goto fail;
-    }
-
-    /* encode as utf8 */
-    for (utf8_position = (unsigned char) (utf8_length - 1); utf8_position > 0; utf8_position--) {
-        /* 10xxxxxx */
-        (*output_pointer)[utf8_position] = (unsigned char) ((codepoint | 0x80) & 0xBF);
-        codepoint >>= 6;
-    }
-    /* encode first byte */
-    if (utf8_length > 1) {
-        (*output_pointer)[0] = (unsigned char) ((codepoint | first_byte_mark) & 0xFF);
-    } else {
-        (*output_pointer)[0] = (unsigned char) (codepoint & 0x7F);
-    }
-
-    *output_pointer += utf8_length;
-
-    return sequence_length;
-
-fail:
-    return 0;
-}
-
 /* Utility to jump whitespace and cr/lf */
 static parse_buffer *buffer_skip_whitespace(parse_buffer *const buffer) {
     if ((buffer == NULL) || (buffer->content == NULL)) {
@@ -250,17 +149,15 @@ static bool parse_string(PyObject **item, parse_buffer *const input_buffer) {
         while (((Py_ssize_t) (input_end - input_buffer->content) < input_buffer->length) && (*input_end != '\"')) {
             // determine the max len of character
             if (max_len < 4) {
-                if (*input_end & 0b10000000 && *input_end & 0b01000000) {
-                    if (*input_end & 0b00100000) {
-                        if (*input_end & 0b00010000) {
-                            max_len = 4;
-                        } else {
-                            max_len = max_len < 3 ? 3 : max_len;
-                        }
-                    } else {
-                        max_len = max_len < 2 ? 2 : max_len;
-                    }
+                uint32_t unicode_value;
+                int skip = get_unicode_value(input_end, &unicode_value);
+                if (unicode_value == 0) {
+                    PyErr_SetString(PyExc_ValueError, "Invalid utf8 string.");
+                    return false;
                 }
+                int tmp_len = get_utf8_type(unicode_value);
+                input_end += skip - 1;
+                max_len = max_len < tmp_len ? tmp_len : max_len;
             }
             /* is escape sequence */
             if (input_end[0] == '\\') {
@@ -275,16 +172,9 @@ static bool parse_string(PyObject **item, parse_buffer *const input_buffer) {
                         PyErr_Format(PyExc_ValueError, "Failed to parse string: invalid utf16 sequence\nposisiotn %d", input_end - input_buffer->content);
                         goto fail;
                     }
-                    const long tmp = parse_hex4(input_end + 2);
-                    if (tmp < 0x80) {
-                        // no need to
-                    } else if (tmp < 0x800) {
-                        max_len = max_len < 2 ? 2 : max_len;
-                    } else if (tmp < 0x10000) {
-                        max_len = max_len < 3 ? 3 : max_len;
-                    } else {
-                        max_len = max_len < 4 ? 4 : max_len;
-                    }
+                    const int tmp_len = get_utf8_type(parse_hex4(input_end + 1));
+                    max_len = max_len < tmp_len ? tmp_len : max_len;
+                    input_end += 4 - 1;
                 }
                 skipped_bytes++;
                 input_end++;
@@ -306,12 +196,6 @@ static bool parse_string(PyObject **item, parse_buffer *const input_buffer) {
             goto success;
         } else if (max_len == 2) {
             if (!str2unicode_2byte(item, (const char *) input_pointer, allocation_length, input_end - buffer_at_offset(input_buffer))) {
-                goto fail;
-            }
-            input_buffer->offset = (Py_ssize_t) (input_end - input_buffer->content);
-            goto success;
-        } else if (max_len == 3) {
-            if (!str2unicode_3byte(item, (const char *) input_pointer, allocation_length, input_end - buffer_at_offset(input_buffer))) {
                 goto fail;
             }
             input_buffer->offset = (Py_ssize_t) (input_end - input_buffer->content);
