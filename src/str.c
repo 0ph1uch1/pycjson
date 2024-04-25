@@ -59,7 +59,8 @@ int get_utf8_type(uint32_t unciode_value) {
     }
 }
 
-int get_unicode_value(const char *str, Py_UCS4 *re) {
+int get_unicode_value_usc4(const char *str, Py_UCS4 *re) {
+    assert(re != NULL);
     if (str[0] & 0b10000000 && !str[0] & 0b01000000) {
         // Continue bytes should be skipped.
         return 0;
@@ -83,9 +84,58 @@ int get_unicode_value(const char *str, Py_UCS4 *re) {
     }
 }
 
+int get_unicode_value_usc2(const char *str, Py_UCS2 *re) {
+    assert(re != NULL);
+    if (str[0] & 0b10000000 && !str[0] & 0b01000000) {
+        // Continue bytes should be skipped.
+        *re = -1;
+        return 0;
+    }
+    if (str[0] & 0b10000000) {
+        if (str[0] & 0b00100000) {
+            if (str[0] & 0b00010000) {
+                // NOPE
+                *re = -1;
+                return 0;
+            } else {
+                *re = ((str[0] & 0b1111) << 12) + ((str[1] & 0b111111) << 6) + (str[2] & 0b111111);
+                return 3; // 3 bytes can be represented under 0xffff
+            }
+        } else {
+            *re = ((str[0] & 0b11111) << 6) + (str[1] & 0b111111);
+            return 2;
+        }
+    } else {
+        *re = str[0] & 0b1111111;
+        return 1;
+    }
+}
+
+int get_unicode_value_usc1(const char *str, Py_UCS1 *re) {
+    assert(re != NULL);
+    if (str[0] & 0b10000000 && !str[0] & 0b01000000) {
+        // Continue bytes should be skipped.
+        *re = -1;
+        return 0;
+    }
+    if (str[0] & 0b10000000) {
+        if (str[0] & 0b00100000) {
+            // NOPE
+            *re = -1;
+            return 0;
+        } else {
+            *re = ((str[0] & 0b11111) << 6) + (str[1] & 0b111111);
+            return 2; // some of 2 bytes can be represented under 0xff
+        }
+    } else {
+        *re = str[0] & 0b1111111;
+        return 1;
+    }
+}
+
 bool str2unicode_1byte(PyObject **re, const char *str, const long alloc, const long num) {
     typedef Py_UCS1 t;
-    *re = PyUnicode_New(alloc, 0xFF); // TODO must be at least alloc + 1 idk why
+    *re = PyUnicode_New(alloc, 0xFF);
     if (*re == NULL) {
         PyErr_Format(PyExc_MemoryError, "Failed to parse string: allocation failure");
         return false;
@@ -93,6 +143,8 @@ bool str2unicode_1byte(PyObject **re, const char *str, const long alloc, const l
     t *data = (t *) ((PyCompactUnicodeObject *) *re + 1);
     long real_len = 0;
     for (int i = 0; i < num - 1; i++) {
+        // no overflow
+        assert(real_len < alloc);
         if (str[i] == '\\') {
             switch (str[++i]) {
                 PARSE_STRING_CHAR_MATCHER(str[i], data, char)
@@ -106,7 +158,7 @@ bool str2unicode_1byte(PyObject **re, const char *str, const long alloc, const l
                     return false;
             }
         } else {
-            const int skip = get_unicode_value(str + i, data++);
+            const int skip = get_unicode_value_usc1(str + i, data++);
             if (skip == 0) {
                 PyErr_SetString(PyExc_ValueError, "Invalid utf8 string.");
                 return false;
@@ -115,6 +167,7 @@ bool str2unicode_1byte(PyObject **re, const char *str, const long alloc, const l
         }
         real_len++;
     }
+    *data = 0;
     // PyUnicode_Resize(re, real_len);
     assert(real_len == alloc); // TODO remove real_len after testing
     return true;
@@ -130,6 +183,8 @@ bool str2unicode_2byte(PyObject **re, const char *str, const long alloc, const l
     t *data = (t *) ((PyCompactUnicodeObject *) *re + 1);
     long real_len = 0;
     for (int i = 0; i < num - 1; i++) {
+        // no overflow
+        assert(real_len < alloc);
         if (str[i] == '\\') {
             switch (str[++i]) {
                 PARSE_STRING_CHAR_MATCHER(str[i], data, t)
@@ -143,7 +198,7 @@ bool str2unicode_2byte(PyObject **re, const char *str, const long alloc, const l
                     return false;
             }
         } else {
-            const int skip = get_unicode_value(str + i, data++);
+            const int skip = get_unicode_value_usc2(str + i, data++);
             if (skip == 0) {
                 PyErr_SetString(PyExc_ValueError, "Invalid utf8 string.");
                 return false;
@@ -152,6 +207,7 @@ bool str2unicode_2byte(PyObject **re, const char *str, const long alloc, const l
         }
         real_len++;
     }
+    *data = 0;
     // PyUnicode_Resize(re, real_len);
     assert(real_len == alloc); // TODO remove real_len after testing
     return true;
@@ -167,6 +223,8 @@ bool str2unicode_4byte(PyObject **re, const char *str, const long alloc, const l
     t *data = (t *) ((PyCompactUnicodeObject *) *re + 1);
     long real_len = 0;
     for (int i = 0; i < num - 1; i++) {
+        // no overflow
+        assert(real_len < alloc);
         if (str[i] == '\\') {
             switch (str[++i]) {
                 PARSE_STRING_CHAR_MATCHER(str[i], data, t)
@@ -180,7 +238,7 @@ bool str2unicode_4byte(PyObject **re, const char *str, const long alloc, const l
                     return false;
             }
         } else {
-            const int skip = get_unicode_value(str + i, data++);
+            const int skip = get_unicode_value_usc4(str + i, data++);
             if (skip == 0) {
                 PyErr_SetString(PyExc_ValueError, "Invalid utf8 string.");
                 return false;
@@ -189,6 +247,7 @@ bool str2unicode_4byte(PyObject **re, const char *str, const long alloc, const l
         }
         real_len++;
     }
+    *data = 0;
     // PyUnicode_Resize(re, real_len);
     assert(real_len == alloc); // TODO remove real_len after testing
     return true;
