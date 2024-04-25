@@ -173,7 +173,7 @@ static bool parse_string(PyObject **item, parse_buffer *const input_buffer) {
             } else {
                 uint32_t unicode_value;
                 // what is actually len of this utf8 sequence
-                int skip = get_unicode_value(input_end, &unicode_value);
+                int skip = get_unicode_value_usc4(input_end, &unicode_value);
                 if (unicode_value == 0) {
                     PyErr_SetString(PyExc_ValueError, "Invalid utf8 string.");
                     return false;
