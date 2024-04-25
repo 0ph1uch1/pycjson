@@ -146,19 +146,6 @@ static bool parse_string(PyObject **item, parse_buffer *const input_buffer) {
         Py_ssize_t skipped_bytes = 0;
         int max_len = 1;
         while (((Py_ssize_t) (input_end - input_buffer->content) < input_buffer->length) && (*input_end != '\"')) {
-            // determine the max len of character
-            if (max_len < 4) {
-                uint32_t unicode_value;
-                int skip = get_unicode_value(input_end, &unicode_value);
-                if (unicode_value == 0) {
-                    PyErr_SetString(PyExc_ValueError, "Invalid utf8 string.");
-                    return false;
-                }
-                int tmp_len = get_utf8_type(unicode_value);
-                input_end += skip - 1;
-                max_len = max_len < tmp_len ? tmp_len : max_len;
-                skipped_bytes += tmp_len - 1;
-            }
             /* is escape sequence */
             if (input_end[0] == '\\') {
                 if ((Py_ssize_t) (input_end + 1 - input_buffer->content) >= input_buffer->length) {
@@ -174,20 +161,37 @@ static bool parse_string(PyObject **item, parse_buffer *const input_buffer) {
                     }
                     const int tmp_len = get_utf8_type(parse_hex4(input_end + 1));
                     max_len = max_len < tmp_len ? tmp_len : max_len;
-                    input_end += 4 - 1;
-                    skipped_bytes += 4 - 1;
+                    // 1 for 'u' and 4 for hex
+                    input_end += 1 + 1 + 4;
+                    skipped_bytes += 1 + 4;
+                } else {
+                    // skip next char like \n,\t,\\ e.t.c
+                    input_end += 2;
+                    // for backslash
+                    skipped_bytes++;
                 }
-                skipped_bytes++;
-                input_end++;
+            } else {
+                uint32_t unicode_value;
+                // what is actually len of this utf8 sequence
+                int skip = get_unicode_value(input_end, &unicode_value);
+                if (unicode_value == 0) {
+                    PyErr_SetString(PyExc_ValueError, "Invalid utf8 string.");
+                    return false;
+                }
+                // what length it should be in python unicode
+                int tmp_len = get_utf8_type(unicode_value);
+                // skip utf8 sequence
+                input_end += skip;
+                max_len = max_len < tmp_len ? tmp_len : max_len;
+                skipped_bytes += skip - 1;
             }
-            input_end++;
         }
         if (((Py_ssize_t) (input_end - input_buffer->content) >= input_buffer->length) || (*input_end != '\"')) {
             PyErr_Format(PyExc_ValueError, "Failed to parse string: string ended unexpectedly\nposition: %d", input_buffer->offset);
             goto fail; /* string ended unexpectedly */
         }
         /* This is at most how much we need for the output */
-        allocation_length = (Py_ssize_t) (input_end - buffer_at_offset(input_buffer)) - skipped_bytes;
+        allocation_length = (Py_ssize_t) (input_end - buffer_at_offset(input_buffer)) - 1 - skipped_bytes;
 
         if (max_len == 1) {
             if (!str2unicode_1byte(item, (const char *) input_pointer, allocation_length, input_end - buffer_at_offset(input_buffer))) {

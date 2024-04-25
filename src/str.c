@@ -85,7 +85,7 @@ int get_unicode_value(const char *str, Py_UCS4 *re) {
 
 bool str2unicode_1byte(PyObject **re, const char *str, const long alloc, const long num) {
     typedef Py_UCS1 t;
-    *re = PyUnicode_New(alloc + 1, 0xFF); // TODO must be at least alloc + 1 idk why
+    *re = PyUnicode_New(alloc, 0xFF); // TODO must be at least alloc + 1 idk why
     if (*re == NULL) {
         PyErr_Format(PyExc_MemoryError, "Failed to parse string: allocation failure");
         return false;
@@ -115,13 +115,14 @@ bool str2unicode_1byte(PyObject **re, const char *str, const long alloc, const l
         }
         real_len++;
     }
-    PyUnicode_Resize(re, real_len);
+    // PyUnicode_Resize(re, real_len);
+    assert(real_len == alloc); // TODO remove real_len after testing
     return true;
 }
 
 bool str2unicode_2byte(PyObject **re, const char *str, const long alloc, const long num) {
     typedef Py_UCS2 t;
-    *re = PyUnicode_New(alloc - 1, 0xFFFF);
+    *re = PyUnicode_New(alloc, 0xFFFF);
     if (*re == NULL) {
         PyErr_Format(PyExc_MemoryError, "Failed to parse string: allocation failure");
         return false;
@@ -151,13 +152,14 @@ bool str2unicode_2byte(PyObject **re, const char *str, const long alloc, const l
         }
         real_len++;
     }
-    PyUnicode_Resize(re, real_len);
+    // PyUnicode_Resize(re, real_len);
+    assert(real_len == alloc); // TODO remove real_len after testing
     return true;
 }
 
 bool str2unicode_4byte(PyObject **re, const char *str, const long alloc, const long num) {
     typedef Py_UCS4 t;
-    *re = PyUnicode_New(alloc - 1, 0x10ffff);
+    *re = PyUnicode_New(alloc, 0x10ffff);
     if (*re == NULL) {
         PyErr_Format(PyExc_MemoryError, "Failed to parse string: allocation failure");
         return false;
@@ -187,6 +189,7 @@ bool str2unicode_4byte(PyObject **re, const char *str, const long alloc, const l
         }
         real_len++;
     }
-    PyUnicode_Resize(re, real_len);
+    // PyUnicode_Resize(re, real_len);
+    assert(real_len == alloc); // TODO remove real_len after testing
     return true;
 }
