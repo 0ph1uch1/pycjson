@@ -1,6 +1,7 @@
 #include "pycJSON.h"
 #define PY_SSIZE_T_CLEAN
 #include "dconv_wrapper.h"
+#include "simdutf_wrapper.h"
 #include "str.h"
 #include <Python.h>
 #include <math.h>
@@ -130,7 +131,6 @@ static bool parse_string(PyObject **item, parse_buffer *const input_buffer) {
     const unsigned char *input_pointer = buffer_at_offset(input_buffer) + 1;
     const unsigned char *input_end = buffer_at_offset(input_buffer) + 1;
 
-    unsigned char *buffer_writer = NULL;
     unsigned char *buffer_ptr = NULL;
     unsigned char parse_string_stack_buffer[STACK_BUFFER_SIZE];
 
@@ -142,132 +142,38 @@ static bool parse_string(PyObject **item, parse_buffer *const input_buffer) {
     }
 
     {
-        /* calculate approximate size of the output (overestimate) */
-        Py_ssize_t allocation_length = 0;
-        Py_ssize_t skipped_bytes = 0;
-        int max_len = 1;
+        size_t skipped_bytes = 0;
         while (((Py_ssize_t) (input_end - input_buffer->content) < input_buffer->length) && (*input_end != '\"')) {
-            /* is escape sequence */
-            if (input_end[0] == '\\') {
-                if ((Py_ssize_t) (input_end + 1 - input_buffer->content) >= input_buffer->length) {
-                    /* prevent buffer overflow when last input character is a backslash */
-                    PyErr_Format(PyExc_ValueError, "Failed to parse string: buffer overflow\nposition: %d", input_buffer->offset);
-                    goto fail;
+            if (*input_end == '\\') {
+                input_end++;
+                skipped_bytes++;
+                if (*input_end == 'u') {
+                    input_end += 4;
+                    skipped_bytes += 4;
                 }
-                if (input_end[1] == 'u') {
-                    // get len
-                    if (input_buffer->length <= input_end - input_buffer->content + 4) {
-                        PyErr_Format(PyExc_ValueError, "Failed to parse string: invalid utf16 sequence\nposisiotn %d", input_end - input_buffer->content);
-                        goto fail;
-                    }
-                    const int tmp_len = get_utf8_type(parse_hex4(input_end + 1));
-                    max_len = max_len < tmp_len ? tmp_len : max_len;
-                    // 1 for 'u' and 4 for hex
-                    input_end += 1 + 1 + 4;
-                    skipped_bytes += 1 + 4;
-                } else {
-                    // skip next char like \n,\t,\\ e.t.c
-                    input_end += 2;
-                    // for backslash
-                    skipped_bytes++;
-                }
-            } else {
-                uint32_t unicode_value;
-                // what is actually len of this utf8 sequence
-                int skip = get_unicode_value_usc4(input_end, &unicode_value);
-                if (unicode_value == 0) {
-                    PyErr_SetString(PyExc_ValueError, "Invalid utf8 string.");
-                    return false;
-                }
-                // what length it should be in python unicode
-                int tmp_len = get_utf8_type(unicode_value);
-                // skip utf8 sequence
-                input_end += skip;
-                max_len = max_len < tmp_len ? tmp_len : max_len;
-                skipped_bytes += skip - 1;
             }
+            input_end++;
         }
-        if (((Py_ssize_t) (input_end - input_buffer->content) >= input_buffer->length) || (*input_end != '\"')) {
-            PyErr_Format(PyExc_ValueError, "Failed to parse string: string ended unexpectedly\nposition: %d", input_buffer->offset);
-            goto fail; /* string ended unexpectedly */
-        }
-        /* This is at most how much we need for the output */
-        allocation_length = (Py_ssize_t) (input_end - buffer_at_offset(input_buffer)) - 1 - skipped_bytes;
+        size_t num = input_end - buffer_at_offset(input_buffer) - 1;
+        size_t alloc = count_utf8(buffer_at_offset(input_buffer) + 1, num) - skipped_bytes;
 
-        if (max_len == 1) {
-            if (!str2unicode_1byte(item, (const char *) input_pointer, allocation_length, input_end - buffer_at_offset(input_buffer))) {
+        if (is_four_byte((const char *) input_pointer, num)) {
+            if (!str2unicode_4byte(item, (const char *) input_pointer, alloc, num)) {
                 goto fail;
             }
             input_buffer->offset = (Py_ssize_t) (input_end - input_buffer->content);
-            goto success;
-        } else if (max_len == 2) {
-            if (!str2unicode_2byte(item, (const char *) input_pointer, allocation_length, input_end - buffer_at_offset(input_buffer))) {
+        } else if (is_one_byte((const char *) input_pointer, num)) {
+            if (!str2unicode_1byte(item, (const char *) input_pointer, alloc, num)) {
                 goto fail;
             }
             input_buffer->offset = (Py_ssize_t) (input_end - input_buffer->content);
-            goto success;
         } else {
-            if (!str2unicode_4byte(item, (const char *) input_pointer, allocation_length, input_end - buffer_at_offset(input_buffer))) {
+            if (!str2unicode_2byte(item, (const char *) input_pointer, alloc, num)) {
                 goto fail;
             }
             input_buffer->offset = (Py_ssize_t) (input_end - input_buffer->content);
-            goto success;
         }
-
-        // if (allocation_length < STACK_BUFFER_SIZE) {
-        //     buffer_ptr = parse_string_stack_buffer;
-        // } else {
-        //     unsigned char *malloc_ptr;
-        //     malloc_ptr = (unsigned char *) input_buffer->hooks.allocate(allocation_length + sizeof(""));
-        //     if (malloc_ptr == NULL) {
-        //         PyErr_Format(PyExc_MemoryError, "Failed to parse string: allocation failure\nposition: %d", input_buffer->offset);
-        //         goto fail; /* allocation failure */
-        //     }
-        //     buffer_ptr = malloc_ptr;
-        // }
     }
-
-    // buffer_writer = buffer_ptr;
-    // /* loop through the string literal */
-    // while (input_pointer < input_end) {
-    //     if (*input_pointer != '\\') {
-    //         *buffer_writer++ = *input_pointer++;
-    //     }
-    //     /* escape sequence */
-    //     else {
-    //         unsigned char sequence_length = 2;
-    //         if ((input_end - input_pointer) < 1) {
-    //             PyErr_Format(PyExc_ValueError, "Failed to parse string: buffer overflow\nposition: %d", input_buffer->offset);
-    //             goto fail;
-    //         }
-    //         unsigned char this_char = input_pointer[1];
-    //         switch (this_char) {
-    //             PARSE_STRING_CHAR_MATCHER(this_char);
-    //             /* UTF-16 literal */
-    //             case 'u':
-    //                 sequence_length = utf16_literal_to_utf8(input_pointer, input_end, &buffer_writer);
-    //                 if (sequence_length == 0) {
-    //                     /* failed to convert UTF16-literal to UTF-8 */
-    //                     PyErr_Format(PyExc_ValueError, "Failed to parse string: invalid UTF-16\nposition: %d", input_buffer->offset);
-    //                     goto fail;
-    //                 }
-    //                 break;
-    //
-    //             default:
-    //                 PyErr_Format(PyExc_ValueError, "Failed to parse string: invalid escape sequence(%d)\nposition: %d", input_pointer[1], input_buffer->offset);
-    //                 goto fail;
-    //         }
-    //         input_pointer += sequence_length;
-    //     }
-    // }
-    //
-    // /* zero terminate the output */
-    // *buffer_writer = '\0';
-    // *item = PyUnicode_FromString((char *) buffer_ptr);
-    //
-    // input_buffer->offset = (Py_ssize_t) (input_end - input_buffer->content);
-
-success:
     PARSE_STRING_FINALIZE;
 
     input_buffer->offset++;
