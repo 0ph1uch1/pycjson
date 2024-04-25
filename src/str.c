@@ -72,14 +72,15 @@ bool is_one_byte(const unsigned char *buf, size_t len) {
         return true;
     }
     for (int i = 0; i < len - 4; i++) {
-        if (buf[i] == '\\' && buf[i + 1] == 'u') {
-            i += 2;
-            if (buf[i++] != '0' || buf[i++] != '0') {
-                return false;
+        if (buf[i] == '\\') {
+            if (buf[i + 1] == 'u') {
+                i += 2;
+                if (buf[i++] != '0' || buf[i++] != '0') {
+                    return false;
+                }
+            } else {
+                i++;
             }
-        } else {
-            // skip next byte
-            i++;
         }
     }
     return true;
