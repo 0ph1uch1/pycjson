@@ -26,13 +26,14 @@ bool check_latin1_2bytes(const unsigned char a, const unsigned char b) {
 }
 
 bool is_one_byte(const unsigned char *buf, size_t len) {
+    // TODO check possible invalid read
     int i;
     __m128i backslash = _mm_set1_epi8((unsigned char) '\\');
+    __m128i max_onebyte = _mm_set1_epi8((unsigned char) 0b10000000);
     for (i = 0; i + 16 <= len; i += 16) {
         __m128i in = _mm_loadu_si128((const void *) (buf + i));
-        __m128i val = _mm_set1_epi8((unsigned char) 0b10000000);
         // if not all bytes are utf8 1bytes sequence in this batch
-        if (_mm_cmpgt_epu8_mask(in, val) != 0) {
+        if (_mm_cmpgt_epu8_mask(in, max_onebyte) != 0) {
             for (int j = 0; j < 16; j++) {
                 if (buf[i + j] & 0b10000000) {
                     if (buf[i + j] & 0b01000000) {
@@ -41,11 +42,12 @@ bool is_one_byte(const unsigned char *buf, size_t len) {
                         if ((buf[i + j] & 0b00100000) || (i + j + 1 < len && !check_latin1_2bytes(buf[i + j], buf[i + j + 1]))) {
                             return false;
                         }
+                        j++;
                     } else {
                         // continue bytes
                         // it is already checked in last batch
+                        // do nothing then
                     }
-                    j++;
                 }
             }
         }
@@ -54,7 +56,7 @@ bool is_one_byte(const unsigned char *buf, size_t len) {
             for (int j = 0; j < 16; j++) {
                 if (buf[i + j] == '\\') {
                     if (buf[i + j + 1] == 'u') {
-                        // skil \u
+                        // skip \u
                         j += 2;
                         if (buf[i + j] != '0' || buf[i + j + 1] != '0') {
                             return false;
@@ -68,21 +70,23 @@ bool is_one_byte(const unsigned char *buf, size_t len) {
             }
         }
     }
-    if (i > 0 && buf[i] & 0b10000000) {
-        // need to check last bytes if it is a staring byte
-        i--;
-    }
+    // handle remaining bytes
     for (; i < len; i++) {
         if (buf[i] & 0b10000000) {
-            // continue byte which will not happened in this case
-            // for valid utf8 string
-            assert(buf[i] & 0b01000000);
-            // if it is 3 bytes utf8 seuqence
-            // OR it is 2 bytes utf8 sequence with unicode > 0xff
-            if ((buf[i] & 0b00100000) || !check_latin1_2bytes(buf[i], buf[i + 1])) {
-                return false;
+            if(buf[i] & 0b01000000) {
+                // if it is 3 bytes utf8 seuqence
+                // OR it is 2 bytes utf8 sequence with unicode > 0xff
+                if ((buf[i] & 0b00100000) || !check_latin1_2bytes(buf[i], buf[i + 1])) {
+                    return false;
+                }
+                // skip the next continue byte of 2bytes sequence
+                i++;
+            }else {
+                // it is a continue byte
+                // the only possible this case happened is the last byte of last batch is a leading byte
+                // and we already handle it in last byte
+                // do nothing then
             }
-            i++;
         }
         if (buf[i] == '\\') {
             if (buf[i + 1] == 'u') {
