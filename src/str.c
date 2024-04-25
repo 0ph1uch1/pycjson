@@ -27,12 +27,12 @@ bool check_latin1_2bytes(const unsigned char a, const unsigned char b) {
 
 bool is_one_byte(const unsigned char *buf, size_t len) {
     int i;
+    __m128i backslash = _mm_set1_epi8((unsigned char) '\\');
     for (i = 0; i + 16 <= len; i += 16) {
         __m128i in = _mm_loadu_si128((const void *) (buf + i));
         __m128i val = _mm_set1_epi8((unsigned char) 0b10000000);
-        uint16_t mask = _mm_cmpgt_epu8_mask(in, val);
         // if not all bytes are utf8 1bytes sequence in this batch
-        if (mask != 0) {
+        if (_mm_cmpgt_epu8_mask(in, val) != 0) {
             for (int j = 0; j < 16; j++) {
                 if (buf[i + j] & 0b10000000) {
                     if (buf[i + j] & 0b01000000) {
@@ -46,6 +46,24 @@ bool is_one_byte(const unsigned char *buf, size_t len) {
                         // it is already checked in last batch
                     }
                     j++;
+                }
+            }
+        }
+        // check if all \uXXXX is < \u00ff
+        if (_mm_cmpeq_epi8_mask(in, backslash) != 0) {
+            for (int j = 0; j < 16; j++) {
+                if (buf[i + j] == '\\') {
+                    if (buf[i + j + 1] == 'u') {
+                        // skil \u
+                        j += 2;
+                        if (buf[i + j] != '0' || buf[i + j + 1] != '0') {
+                            return false;
+                        }
+                        // skip XXXX
+                        j += 4;
+                    } else {
+                        j++;
+                    }
                 }
             }
         }
@@ -66,20 +84,15 @@ bool is_one_byte(const unsigned char *buf, size_t len) {
             }
             i++;
         }
-    }
-    // check if all \uXXXX is < \u00ff
-    if (len < 4) {
-        return true;
-    }
-    for (int i = 0; i < len - 4; i++) {
         if (buf[i] == '\\') {
             if (buf[i + 1] == 'u') {
+                // skil \u
                 i += 2;
-                if (buf[i++] != '0' || buf[i++] != '0') {
+                if (buf[i] != '0' || buf[i + 1] != '0') {
                     return false;
                 }
-            } else {
-                i++;
+                // skip XXXX
+                i += 4;
             }
         }
     }
