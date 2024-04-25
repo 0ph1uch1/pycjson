@@ -17,15 +17,15 @@ else:
 def find_src():
     srcs = []
     headers = []
-    for root, _, files in os.walk("src"):
-        for file in files:
-            if file.endswith(".c") or file.endswith(".cpp"):
-                srcs.append(os.path.join(root, file))
-            elif file.endswith(".h"):
-                if file != "version_template.h":
-                    headers.append(os.path.join(root, file))
-    srcs.append(os.path.abspath("./deps/double-conversion.cpp"))
-    headers.append(os.path.abspath("./deps/double-conversion.h"))
+    dirs = ["src", "deps"]
+    for d in dirs:
+        for root, _, files in os.walk(d):
+            for file in files:
+                if file.endswith(".c") or file.endswith(".cpp"):
+                    srcs.append(os.path.join(root, file))
+                elif file.endswith(".h"):
+                    if file != "version_template.h":
+                        headers.append(os.path.join(root, file))
     return srcs, headers
 
 
