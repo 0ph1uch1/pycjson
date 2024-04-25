@@ -1,5 +1,90 @@
 #include "str.h"
 
+#include "simdutf_wrapper.h"
+
+#include <emmintrin.h> // SSE2
+#include <immintrin.h> // AVX
+
+bool is_four_byte(const unsigned char *buf, size_t len) {
+    int i;
+    for (i = 0; i + 16 <= len; i += 16) {
+        __m128i in = _mm_loadu_si128((const void *) (buf + i + 16));
+        __m128i val = _mm_set1_epi8((unsigned char) 239);
+        uint16_t mask = _mm_cmpgt_epu8_mask(in, val);
+        if (mask != 0) {
+            return true;
+        }
+    }
+    for (; i < len; i++) {
+        if (buf[i] > 239) return true;
+    }
+    return false;
+}
+
+bool check_latin1_2bytes(const unsigned char a, const unsigned char b) {
+    return ((a & 0b00011111) << 6 | (b & 0b00111111)) <= 0xFF;
+}
+
+bool is_one_byte(const unsigned char *buf, size_t len) {
+    int i;
+    for (i = 0; i + 16 <= len; i += 16) {
+        __m128i in = _mm_loadu_si128((const void *) (buf + i));
+        __m128i val = _mm_set1_epi8((unsigned char) 0b10000000);
+        uint16_t mask = _mm_cmpgt_epu8_mask(in, val);
+        // if not all bytes are utf8 1bytes sequence in this batch
+        if (mask != 0) {
+            for (int j = 0; j < 16; j++) {
+                if (buf[i + j] & 0b10000000) {
+                    if (buf[i + j] & 0b01000000) {
+                        // if it is 3 bytes utf8 seuqence
+                        // OR it is 2 bytes utf8 sequence with unicode > 0xff
+                        if ((buf[i + j] & 0b00100000) || (i + j + 1 < len && !check_latin1_2bytes(buf[i + j], buf[i + j + 1]))) {
+                            return false;
+                        }
+                    } else {
+                        // continue bytes
+                        // it is already checked in last batch
+                    }
+                    j++;
+                }
+            }
+        }
+    }
+    if (i > 0 && buf[i] & 0b10000000) {
+        // need to check last bytes if it is a staring byte
+        i--;
+    }
+    for (; i < len; i++) {
+        if (buf[i] & 0b10000000) {
+            // continue byte which will not happened in this case
+            // for valid utf8 string
+            assert(buf[i] & 0b01000000);
+            // if it is 3 bytes utf8 seuqence
+            // OR it is 2 bytes utf8 sequence with unicode > 0xff
+            if ((buf[i] & 0b00100000) || !check_latin1_2bytes(buf[i], buf[i + 1])) {
+                return false;
+            }
+            i++;
+        }
+    }
+    // check if all \uXXXX is < \u00ff
+    if (len < 4) {
+        return true;
+    }
+    for (int i = 0; i < len - 4; i++) {
+        if (buf[i] == '\\' && buf[i + 1] == 'u') {
+            i += 2;
+            if (buf[i++] != '0' || buf[i++] != '0') {
+                return false;
+            }
+        } else {
+            // skip next byte
+            i++;
+        }
+    }
+    return true;
+}
+
 #define PARSE_STRING_CHAR_MATCHER(x, ptr, t) \
     case 'b':                                \
         *ptr++ = (t) '\b';                   \
@@ -142,7 +227,7 @@ bool str2unicode_1byte(PyObject **re, const char *str, const long alloc, const l
     }
     t *data = (t *) ((PyCompactUnicodeObject *) *re + 1);
     long real_len = 0;
-    for (int i = 0; i < num - 1; i++) {
+    for (int i = 0; i < num; i++) {
         // no overflow
         assert(real_len < alloc);
         if (str[i] == '\\') {
@@ -182,7 +267,7 @@ bool str2unicode_2byte(PyObject **re, const char *str, const long alloc, const l
     }
     t *data = (t *) ((PyCompactUnicodeObject *) *re + 1);
     long real_len = 0;
-    for (int i = 0; i < num - 1; i++) {
+    for (int i = 0; i < num; i++) {
         // no overflow
         assert(real_len < alloc);
         if (str[i] == '\\') {
@@ -222,7 +307,7 @@ bool str2unicode_4byte(PyObject **re, const char *str, const long alloc, const l
     }
     t *data = (t *) ((PyCompactUnicodeObject *) *re + 1);
     long real_len = 0;
-    for (int i = 0; i < num - 1; i++) {
+    for (int i = 0; i < num; i++) {
         // no overflow
         assert(real_len < alloc);
         if (str[i] == '\\') {
