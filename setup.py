@@ -11,10 +11,10 @@ if platform.system() == "Linux":
     extra_compile_args += [f"-std={CPPSTD}", f"-std={CSTD}"]
 elif platform.system() == "Windows":
     strip_flags = []
-    extra_compile_args += [f"/std:{CPPSTD}", f"/std:{CSTD}"]
+    extra_compile_args += [f"/std:c++20", f"/std:c2x"]
 elif platform.system() == "Darwin":
     strip_flags = []
-    extra_compile_args += [f"-std=c++20"]
+    extra_compile_args += [f"-std=c++2a"]
 
 
 def find_src():
