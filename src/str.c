@@ -73,7 +73,7 @@ bool is_one_byte(const unsigned char *buf, size_t len) {
     // handle remaining bytes
     for (; i < len; i++) {
         if (buf[i] & 0b10000000) {
-            if(buf[i] & 0b01000000) {
+            if (buf[i] & 0b01000000) {
                 // if it is 3 bytes utf8 seuqence
                 // OR it is 2 bytes utf8 sequence with unicode > 0xff
                 if ((buf[i] & 0b00100000) || !check_latin1_2bytes(buf[i], buf[i + 1])) {
@@ -81,7 +81,7 @@ bool is_one_byte(const unsigned char *buf, size_t len) {
                 }
                 // skip the next continue byte of 2bytes sequence
                 i++;
-            }else {
+            } else {
                 // it is a continue byte
                 // the only possible this case happened is the last byte of last batch is a leading byte
                 // and we already handle it in last byte

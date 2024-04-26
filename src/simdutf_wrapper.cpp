@@ -1,4 +1,3 @@
-#include "simdutf_wrapper.h"
 #include "simdutf.h"
 
 namespace simdutf_wrapper {
