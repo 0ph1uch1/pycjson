@@ -1,7 +1,6 @@
 import os
 import sys
 import unittest
-
 import json
 import math
 import random
@@ -51,6 +50,8 @@ class FuzzGenerator:
     def length(self):
         self._shrink *= 0.99
         return int(math.exp(self._randomizer.uniform(-0.5, 5)) * self._shrink)
+
+
 class TestMemory(unittest.TestCase):
     @staticmethod
     def collect_all_objects(obj):
@@ -105,7 +106,7 @@ class TestMemory(unittest.TestCase):
             # PyPy's GC works differently (no ref counting), so this wouldn't be useful.
             # Simply returning an empty list effectively disables the refcount test.
             return []
-        
+
         import cjson
 
         now = time.time()
@@ -167,7 +168,7 @@ class TestMemory(unittest.TestCase):
         print(f"mem_diff: {mem_diff}, peak_diff: {peak_diff}")
         # should not increase more than 100 bytes
         self.assertGreaterEqual(100, mem_diff)
-        
+
     def test_dump_leak_refcount(self):
         """
         Developed by ESN, an Electronic Arts Inc. studio.
@@ -196,33 +197,34 @@ class TestMemory(unittest.TestCase):
             # PyPy's GC works differently (no ref counting), so this wouldn't be useful.
             # Simply returning an empty list effectively disables the refcount test.
             return []
-        
+
         import cjson
         import tempfile
 
         now = time.time()
         seeds = [now * i for i in range(1, 31)]
         for seed in seeds:
-            with tempfile.NamedTemporaryFile("w", delete=True) as f:
-                data = self.random_object(seed)
-                # print(f"--seed {seed}")
+            f = tempfile.NamedTemporaryFile("w", delete=True)
+            data = self.random_object(seed)
+            # print(f"--seed {seed}")
 
-                data_objects = self.collect_all_objects(data)
-                # Exclude ints because they get referenced by the lists below.
-                data_objects = [o for o in data_objects if not isinstance(o, int)]
-                gc.collect()
-                data_ref_counts_before = [sys.getrefcount(o) for o in data_objects]
-                cjson.dump(data, f)
-                gc.collect()
-                data_ref_counts_after = [sys.getrefcount(o) for o in data_objects]
-                if data_ref_counts_before != data_ref_counts_after:
-                    for o, before, after in zip(
-                        data_objects, data_ref_counts_before, data_ref_counts_after
-                    ):
-                        if before != after:
-                            print(f"Ref count of {o!r} went from {before} to {after}")
-                    self.assertTrue(False, "Ref count changed")
-                    
+            data_objects = self.collect_all_objects(data)
+            # Exclude ints because they get referenced by the lists below.
+            data_objects = [o for o in data_objects if not isinstance(o, int)]
+            gc.collect()
+            data_ref_counts_before = [sys.getrefcount(o) for o in data_objects]
+            cjson.dump(data, f)
+            gc.collect()
+            data_ref_counts_after = [sys.getrefcount(o) for o in data_objects]
+            if data_ref_counts_before != data_ref_counts_after:
+                for o, before, after in zip(
+                    data_objects, data_ref_counts_before, data_ref_counts_after
+                ):
+                    if before != after:
+                        print(f"Ref count of {o!r} went from {before} to {after}")
+                self.assertTrue(False, "Ref count changed")
+            f.close()
+
     def test_dump_leak(self):
         if hasattr(sys, "pypy_version_info"):
             # skip PyPy
@@ -235,17 +237,19 @@ class TestMemory(unittest.TestCase):
 
         import cjson
         import tempfile
-        
+
         datas = []
         for file in get_benchfiles_fullpath():
             with open(file, "r", encoding='utf-8') as f:
                 datas.append(json.load(f))
 
+        f = tempfile.NamedTemporaryFile("w", delete=True)
+
         # warm up. CPython will not release memory immediately.
         for data in datas:
             for _ in range(10):
-                with tempfile.NamedTemporaryFile("w", delete=True) as f:
-                    json.dump(data, f)
+                cjson.dump(data, f)
+                f.seek(0)
         #
         tracemalloc.start()
         #
@@ -253,8 +257,8 @@ class TestMemory(unittest.TestCase):
         snapshot_1, peak_1 = tracemalloc.get_traced_memory()
         for data in datas:
             for _ in range(10):
-                with tempfile.NamedTemporaryFile("w", delete=True) as f:
-                    cjson.dump(data, f)
+                cjson.dump(data, f)
+                f.seek(0)
         gc.collect()
         snapshot_2, peak_2 = tracemalloc.get_traced_memory()
         #
@@ -263,7 +267,8 @@ class TestMemory(unittest.TestCase):
         print(f"mem_diff: {mem_diff}, peak_diff: {peak_diff}")
         # should not increase more than 100 bytes
         self.assertGreaterEqual(100, mem_diff)
-        
+        f.close()
+
     def test_load_leak(self):
         if hasattr(sys, "pypy_version_info"):
             # skip PyPy
@@ -275,23 +280,25 @@ class TestMemory(unittest.TestCase):
         from test_utils import get_benchfiles_fullpath
 
         import cjson
-        import json
 
         file_paths = get_benchfiles_fullpath()
-        # warm up. CPython will not release memory immediately.
+        fs = []
         for file in file_paths:
+            fs.append(open(file, "r"))
+        # warm up. CPython will not release memory immediately.
+        for f in fs:
             for _ in range(10):
-                with open(file, "r") as f:
-                    cjson.load(f)
+                cjson.load(f)
+                f.seek(0)
         #
         tracemalloc.start()
         #
         gc.collect()
         snapshot_1, peak_1 = tracemalloc.get_traced_memory()
-        for file in file_paths:
+        for f in fs:
             for _ in range(10):
-                with open(file, "r") as f:
-                    cjson.load(f)
+                cjson.load(f)
+                f.seek(0)
         gc.collect()
         snapshot_2, peak_2 = tracemalloc.get_traced_memory()
         #
@@ -300,6 +307,8 @@ class TestMemory(unittest.TestCase):
         print(f"mem_diff: {mem_diff}, peak_diff: {peak_diff}")
         # should not increase more than 100 bytes
         self.assertGreaterEqual(100, mem_diff)
+        for f in fs:
+            f.close()
 
 
 if __name__ == "__main__":
