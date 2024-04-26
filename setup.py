@@ -14,7 +14,7 @@ elif platform.system() == "Windows":
     extra_compile_args += [f"/std:c++20", f"/std:c2x"]
 elif platform.system() == "Darwin":
     strip_flags = []
-    extra_compile_args += [f"-std=c++2a"]
+    extra_compile_args += [f"-std=c++17"]
 
 
 def find_src():
