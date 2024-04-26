@@ -3,12 +3,15 @@ import platform
 
 from setuptools import Extension, setup
 
-CPPSTD = "c++20"
+CPPSTD = "c++2a"
 CSTD = "c2x"
 extra_compile_args = ["-D_GNU_SOURCE"]
 if platform.system() == "Linux" or platform.system() == "Darwin":
     strip_flags = ["-Wl,--strip-all"]
     extra_compile_args += [f"-std={CPPSTD}", f"-std={CSTD}"]
+elif platform.system() == "Windows":
+    strip_flags = []
+    extra_compile_args += [f"/std:c++20", f"/std:c20"]
 else:
     strip_flags = []
     extra_compile_args += [f"/std:{CPPSTD}", f"/std:{CSTD}"]
@@ -25,7 +28,7 @@ def find_src():
                 if file != "version_template.h":
                     headers.append(os.path.join(root, file))
     srcs.append(os.path.abspath("./deps/double-conversion.cpp"))
-    headers.append(os.path.abspath("./deps/double-conversion.h"))
+    headers.append(os.path.abspath("./deps/double-conversion.hpp"))
     return srcs, headers
 
 
