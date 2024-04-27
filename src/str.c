@@ -66,7 +66,7 @@ bool is_one_byte(const unsigned char *buf, size_t len) {
         }
         result = _mm_cmpeq_epi8_mask(in, unicode_mask2) >> 1;
         if (result != 0) {
-            for (int ii = 2; ii < 16; ii += 2) {
+            for (int ii = 0; ii < 16; ii += 2) {
                 if (((result >> (16 - ii - 2)) & 0b11) == 0b11 && i + ii + 4 < len && i + ii - 1 - 1 >= 0 && buf[i + ii - 1 - 1] != '\\') {
                     if (buf[i + ii - 1] != '0' || buf[i + ii + 1 - 1] != '0') {
                         return false;
