@@ -6,10 +6,12 @@ on:
     paths:
       - "src/**"
       - "test/**"
+      - "setup.py"
   pull_request:
     paths:
       - "src/**"
       - "test/**"
+      - "setup.py"
 
 jobs:
   run-test:
