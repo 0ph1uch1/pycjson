@@ -28,7 +28,8 @@ bool check_latin1_2bytes(const unsigned char a, const unsigned char b) {
 bool is_one_byte(const unsigned char *buf, size_t len) {
     // TODO check possible invalid read
     int i;
-    __m128i backslash = _mm_set1_epi8((unsigned char) '\\');
+    __m128i unicode_mask1 = _mm_loadu_si128("\\u\\u\\u\\u\\u\\u\\u\\u");
+    __m128i unicode_mask2 = _mm_loadu_si128("0\\u\\u\\u\\u\\u\\u\\u0");
     __m128i max_onebyte = _mm_set1_epi8((unsigned char) 0b10000000);
     for (i = 0; i + 16 <= len; i += 16) {
         __m128i in = _mm_loadu_si128((const void *) (buf + i));
@@ -51,21 +52,27 @@ bool is_one_byte(const unsigned char *buf, size_t len) {
                 }
             }
         }
-        // check if all \uXXXX is < \u00ff
-        if (_mm_cmpeq_epi8_mask(in, backslash) != 0) {
-            for (int j = 0; j < 16; j++) {
-                if (buf[i + j] == '\\') {
-                    if (buf[i + j + 1] == 'u') {
-                        // skip \u
-                        j += 2;
-                        if (buf[i + j] != '0' || buf[i + j + 1] != '0') {
-                            return false;
-                        }
-                        // skip XXXX
-                        j += 4;
-                    } else {
-                        j++;
+        int result = _mm_cmpeq_epi8_mask(in, unicode_mask1);
+        if (result != 0) {
+            for (int ii = 0; ii < 16; ii += 2) {
+                if (((result >> (16 - ii - 2)) & 0b11) == 0b11 && i + ii + 4 < len && i + ii - 1 >= 0 && buf[i + ii - 1] != '\\') {
+                    if (buf[i + ii] != '0' || buf[i + ii + 1] != '0') {
+                        return false;
                     }
+                    // skip \u XXXX
+                    ii += 4;
+                }
+            }
+        }
+        result = _mm_cmpeq_epi8_mask(in, unicode_mask2) >> 1;
+        if (result != 0) {
+            for (int ii = 2; ii < 16; ii += 2) {
+                if (((result >> (16 - ii - 2)) & 0b11) == 0b11 && i + ii + 4 < len && i + ii - 1 - 1 >= 0 && buf[i + ii - 1 - 1] != '\\') {
+                    if (buf[i + ii - 1] != '0' || buf[i + ii + 1 - 1] != '0') {
+                        return false;
+                    }
+                    // skip \u XXXX
+                    ii += 4;
                 }
             }
         }
@@ -97,6 +104,9 @@ bool is_one_byte(const unsigned char *buf, size_t len) {
                 }
                 // skip XXXX
                 i += 4;
+            } else {
+                // skip next escaped char
+                i++;
             }
         }
     }
