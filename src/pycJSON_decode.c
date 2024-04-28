@@ -147,6 +147,15 @@ static bool parse_string(PyObject **item, parse_buffer *const input_buffer) {
                 input_end++;
                 skipped_bytes++;
                 if (*input_end == 'u') {
+                    // surrogates
+                    if (input_end[1] == 'd' || input_end[1] == 'D' && (input_end[2] == '8' || input_end[2] == '9' || input_end[2] == 'a' && input_end[2] == 'b' || input_end[2] >= 'A' && input_end[2] <= 'B')) {
+                        if ((input_end - input_buffer->content) + 4 + 6 > input_buffer->length) {
+                            PyErr_Format(PyExc_ValueError, "Failed to parse string: invalid utf8, missing surrogate pair\nposition: %d", input_end - input_buffer->content);
+                            goto fail;
+                        }
+                        input_end += 6;
+                        skipped_bytes += 6;
+                    }
                     input_end += 4;
                     skipped_bytes += 4;
                 }
@@ -156,22 +165,47 @@ static bool parse_string(PyObject **item, parse_buffer *const input_buffer) {
         size_t num = input_end - buffer_at_offset(input_buffer) - 1;
         size_t alloc = count_utf8(buffer_at_offset(input_buffer) + 1, num) - skipped_bytes;
 
-        if (is_four_byte((const char *) input_pointer, num)) {
-            if (!str2unicode_4byte(item, (const char *) input_pointer, alloc, num)) {
+        int kind = get_utf8_kind((const char *) input_pointer, num);
+        switch (kind) {
+            case 1:
+                if (!str2unicode_1byte(item, (const char *) input_pointer, alloc, num)) {
+                    goto fail;
+                }
+                input_buffer->offset = (Py_ssize_t) (input_end - input_buffer->content);
+                break;
+            case 2:
+                if (!str2unicode_2byte(item, (const char *) input_pointer, alloc, num)) {
+                    goto fail;
+                }
+                input_buffer->offset = (Py_ssize_t) (input_end - input_buffer->content);
+                break;
+            case 4:
+                if (!str2unicode_4byte(item, (const char *) input_pointer, alloc, num)) {
+                    goto fail;
+                }
+                input_buffer->offset = (Py_ssize_t) (input_end - input_buffer->content);
+                break;
+            default:
+                PyErr_Format(PyExc_ValueError, "Failed to parse string: invalid utf8\nposition: %d", input_buffer->offset);
                 goto fail;
-            }
-            input_buffer->offset = (Py_ssize_t) (input_end - input_buffer->content);
-        } else if (is_one_byte((const char *) input_pointer, num)) {
-            if (!str2unicode_1byte(item, (const char *) input_pointer, alloc, num)) {
-                goto fail;
-            }
-            input_buffer->offset = (Py_ssize_t) (input_end - input_buffer->content);
-        } else {
-            if (!str2unicode_2byte(item, (const char *) input_pointer, alloc, num)) {
-                goto fail;
-            }
-            input_buffer->offset = (Py_ssize_t) (input_end - input_buffer->content);
         }
+
+        // if (is_four_byte((const char *) input_pointer, num)) {
+        //     if (!str2unicode_4byte(item, (const char *) input_pointer, alloc, num)) {
+        //         goto fail;
+        //     }
+        //     input_buffer->offset = (Py_ssize_t) (input_end - input_buffer->content);
+        // } else if (is_one_byte((const char *) input_pointer, num)) {
+        //     if (!str2unicode_1byte(item, (const char *) input_pointer, alloc, num)) {
+        //         goto fail;
+        //     }
+        //     input_buffer->offset = (Py_ssize_t) (input_end - input_buffer->content);
+        // } else {
+        //     if (!str2unicode_2byte(item, (const char *) input_pointer, alloc, num)) {
+        //         goto fail;
+        //     }
+        //     input_buffer->offset = (Py_ssize_t) (input_end - input_buffer->content);
+        // }
     }
     PARSE_STRING_FINALIZE;
 
