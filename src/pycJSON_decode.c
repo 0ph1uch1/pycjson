@@ -189,23 +189,6 @@ static bool parse_string(PyObject **item, parse_buffer *const input_buffer) {
                 PyErr_Format(PyExc_ValueError, "Failed to parse string: invalid utf8\nposition: %d", input_buffer->offset);
                 goto fail;
         }
-
-        // if (is_four_byte((const char *) input_pointer, num)) {
-        //     if (!str2unicode_4byte(item, (const char *) input_pointer, alloc, num)) {
-        //         goto fail;
-        //     }
-        //     input_buffer->offset = (Py_ssize_t) (input_end - input_buffer->content);
-        // } else if (is_one_byte((const char *) input_pointer, num)) {
-        //     if (!str2unicode_1byte(item, (const char *) input_pointer, alloc, num)) {
-        //         goto fail;
-        //     }
-        //     input_buffer->offset = (Py_ssize_t) (input_end - input_buffer->content);
-        // } else {
-        //     if (!str2unicode_2byte(item, (const char *) input_pointer, alloc, num)) {
-        //         goto fail;
-        //     }
-        //     input_buffer->offset = (Py_ssize_t) (input_end - input_buffer->content);
-        // }
     }
     PARSE_STRING_FINALIZE;
 

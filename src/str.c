@@ -13,8 +13,6 @@ int get_utf8_kind(const unsigned char *buf, size_t len) {
     int i;
     const __m128i unicode_mask1 = _mm_loadu_si128("\\u\\u\\u\\u\\u\\u\\u\\u");
     const __m128i unicode_mask2 = _mm_loadu_si128("0\\u\\u\\u\\u\\u\\u\\u0");
-    const __m128i unicode_mask3 = _mm_loadu_si128("\\U\\U\\U\\U\\U\\U\\U\\U");
-    const __m128i unicode_mask4 = _mm_loadu_si128("0\\U\\U\\U\\U\\U\\U\\U0");
     const __m128i min_4bytes = _mm_set1_epi8((unsigned char) 239);
     const __m128i max_onebyte = _mm_set1_epi8((unsigned char) 0b10000000);
     int kind = 1;
@@ -61,21 +59,6 @@ int get_utf8_kind(const unsigned char *buf, size_t len) {
                 }
             }
         }
-        result = _mm_cmpeq_epi8_mask(in, unicode_mask3);
-        if (result != 0) {
-            for (int ii = 0; ii < 16; ii += 2) {
-                if (((result >> (16 - ii - 2)) & 0b11) == 0b11 && i + ii + 4 + 4 < len && i + ii - 1 >= 0 && buf[i + ii - 1] != '\\') {
-                    // > \uFFFF
-                    if (buf[i + ii] != '0' || buf[i + ii + 1] != '0' || buf[i + ii + 2] != '0' || buf[i + ii + 3] != '0') {
-                        return 4;
-                    } else if (buf[i + ii + 4] != '0' || buf[i + ii + 5] != '0') {
-                        kind = 2;
-                    }
-                    // skip \U XXXX XXXX
-                    ii += 8;
-                }
-            }
-        }
 
         result = _mm_cmpeq_epi8_mask(in, unicode_mask2) >> 1;
         if (result != 0) {
@@ -86,20 +69,6 @@ int get_utf8_kind(const unsigned char *buf, size_t len) {
                     }
                     // skip \u XXXX
                     ii += 4;
-                }
-            }
-        }
-        result = _mm_cmpeq_epi8_mask(in, unicode_mask4) >> 1;
-        if (result != 0) {
-            for (int ii = 0; ii < 16; ii += 2) {
-                if (((result >> (16 - ii - 2)) & 0b11) == 0b11 && i + ii + 4 + 4 < len && i + ii - 1 - 1 >= 0 && buf[i + ii - 1 - 1] != '\\') {
-                    if (buf[i + ii - 1] != '0' || buf[i + ii + 1 - 1] != '0' || buf[i + ii + 2 - 1] != '0' || buf[i + ii + 3 - 1] != '0') {
-                        return 4;
-                    } else if (buf[i + ii + 4 - 1] != '0' || buf[i + ii + 5 - 1] != '0') {
-                        kind = 2;
-                    }
-                    // skip \U XXXX XXXX
-                    ii += 8;
                 }
             }
         }
