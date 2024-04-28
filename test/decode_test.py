@@ -81,6 +81,7 @@ class TestDecode(unittest.TestCase):
             dict({a: b for a in range(10) for b in range(10)}),
             [[[[[[[[[[[[[[]]]]]]], [[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]],
             collections.OrderedDict(x=1),
+            "\u3000\U00010000",
         ]
 
         from test_utils import get_benchfiles_fullpath
