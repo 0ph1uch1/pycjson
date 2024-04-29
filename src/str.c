@@ -5,31 +5,30 @@
 #include <emmintrin.h> // SSE2
 #include <immintrin.h> // AVX
 
-bool check_latin1_2bytes(const unsigned char a, const unsigned char b) {
-    return ((a & 0b00011111) << 6 | (b & 0b00111111)) <= 0xFF;
-}
+#define CHECK_NOT_LATIN1_2BYTES(a, b) (((a & 0b00011111) << 6 | (b & 0b00111111)) > 0xFF)
+
 
 int get_utf8_kind(const unsigned char *buf, size_t len) {
     int i;
-    const __m128i unicode_mask1 = _mm_loadu_si128("\\u\\u\\u\\u\\u\\u\\u\\u");
-    const __m128i unicode_mask2 = _mm_loadu_si128("0\\u\\u\\u\\u\\u\\u\\u0");
-    const __m128i min_4bytes = _mm_set1_epi8((unsigned char) 239);
-    const __m128i max_onebyte = _mm_set1_epi8((unsigned char) 0b10000000);
+    const __m256i unicode_mask1 = _mm256_loadu_epi16("\\u");
+    const __m256i unicode_mask2 = _mm256_loadu_si256("0\\u\\u\\u\\u\\u\\u\\u\\u\\u\\u\\u\\u\\u\\u\\u0");
+    const __m256i min_4bytes = _mm256_set1_epi8(239);
+    const __m256i max_onebyte = _mm256_set1_epi8(0b10000000);
     int kind = 1;
-    for (i = 0; i + 16 <= len; i += 16) {
-        __m128i in = _mm_loadu_si128((const void *) (buf + i));
-        if (_mm_cmpgt_epu8_mask(in, min_4bytes) != 0) {
+    for (i = 0; i + 32 <= len; i += 32) {
+        __m256i in = _mm256_loadu_si256((const void *) (buf + i));
+        if (_mm256_cmpgt_epu8_mask(in, min_4bytes) != 0) {
             // it is 4 bytes
             return 4;
         }
         // if not all bytes are utf8 1bytes sequence in this batch
-        if (_mm_cmpgt_epu8_mask(in, max_onebyte) != 0) {
-            for (int j = 0; j < 16; j++) {
+        if (_mm256_cmpgt_epu8_mask(in, max_onebyte) != 0) {
+            for (int j = 0; j < 32; j++) {
                 if (buf[i + j] & 0b10000000) {
                     if (buf[i + j] & 0b01000000) {
                         // if it is 3 bytes utf8 seuqence
                         // OR it is 2 bytes utf8 sequence with unicode > 0xff
-                        if ((buf[i + j] & 0b00100000) || (i + j + 1 < len && !check_latin1_2bytes(buf[i + j], buf[i + j + 1]))) {
+                        if ((buf[i + j] & 0b00100000) || (i + j + 1 < len && CHECK_NOT_LATIN1_2BYTES(buf[i + j], buf[i + j + 1]))) {
                             kind = 2;
                         }
                         j++;
@@ -41,13 +40,12 @@ int get_utf8_kind(const unsigned char *buf, size_t len) {
                 }
             }
         }
-        int result = _mm_cmpeq_epi8_mask(in, unicode_mask1);
+        unsigned int result = _mm256_cmpeq_epu8_mask(in, unicode_mask1);
         if (result != 0) {
-            for (int ii = 0; ii < 16; ii += 2) {
-                if (((result >> (16 - ii - 2)) & 0b11) == 0b11 && i + ii + 4 < len && i + ii - 1 >= 0 && buf[i + ii - 1] != '\\') {
+            for (int ii = 0; ii < 32; ii += 2) {
+                if (((result >> (32 - ii - 2)) & 0b11) == 0b11 && i + ii + 4 <= len && i + ii - 1 >= 0 && buf[i + ii - 1] != '\\') {
                     // surrogates
-                    if ((buf[i + ii] == 'd' || buf[i + ii] == 'D') &&
-                        (buf[i + ii + 1] >= '8' || buf[i + ii + 1] <= '9' || buf[i + ii + 1] == 'a' && buf[i + ii + 1] == 'b' || buf[i + ii + 1] >= 'A' && buf[i + ii + 1] <= 'B')) {
+                    if (CHECK_SURROGATES_UNICODE(buf + i + ii + 2)) {
                         return 4;
                     }
                     // 4 digit unicode can only be 1 byte or 2 bytes < \uFFFF
@@ -60,10 +58,14 @@ int get_utf8_kind(const unsigned char *buf, size_t len) {
             }
         }
 
-        result = _mm_cmpeq_epi8_mask(in, unicode_mask2) >> 1;
+        result = _mm256_cmpeq_epu8_mask(in, unicode_mask2) >> 1;
         if (result != 0) {
-            for (int ii = 0; ii < 16; ii += 2) {
-                if (((result >> (16 - ii - 2)) & 0b11) == 0b11 && i + ii + 4 < len && i + ii - 1 - 1 >= 0 && buf[i + ii - 1 - 1] != '\\') {
+            for (int ii = 0; ii < 32; ii += 2) {
+                if (((result >> (32 - ii - 2)) & 0b11) == 0b11 && i + ii + 4 - 1 <= len && i + ii - 1 - 1 >= 0 && buf[i + ii - 1 - 1] != '\\') {
+                    // surrogates
+                    if (CHECK_SURROGATES_UNICODE(buf + i + ii - 1 + 2)) {
+                        return 4;
+                    }
                     if (buf[i + ii - 1] != '0' || buf[i + ii + 1 - 1] != '0') {
                         kind = 2;
                     }
@@ -79,7 +81,7 @@ int get_utf8_kind(const unsigned char *buf, size_t len) {
             if (buf[i] & 0b01000000) {
                 // if it is 3 bytes utf8 seuqence
                 // OR it is 2 bytes utf8 sequence with unicode > 0xff
-                if ((buf[i] & 0b00100000) || !check_latin1_2bytes(buf[i], buf[i + 1])) {
+                if ((buf[i] & 0b00100000) || CHECK_NOT_LATIN1_2BYTES(buf[i], buf[i + 1])) {
                     kind = 2;
                 }
                 // skip the next continue byte of 2bytes sequence
@@ -92,23 +94,17 @@ int get_utf8_kind(const unsigned char *buf, size_t len) {
             }
         }
         if (buf[i] == '\\') {
-            if (i + 4 + 2 < len && buf[i + 1] == 'u') {
+            if (i + 4 + 2 <= len && buf[i + 1] == 'u') {
                 // skil \u
                 i += 2;
+                if (CHECK_SURROGATES_UNICODE(buf + i)) {
+                    return 4;
+                }
                 if (buf[i] != '0' || buf[i + 1] != '0') {
                     kind = 2;
                 }
                 // skip XXXX
                 i += 4;
-            } else if (i + 8 + 2 < len && buf[i + 1] == 'U') {
-                i += 2;
-                // \UXXXXXXXX
-                if (buf[i] != '0' || buf[i + 1] != '0' || buf[i + 2] != '0' || buf[i + 3] != '0') {
-                    return 4;
-                } else if (buf[i + 4] != '0' || buf[i + 5] != '0') {
-                    kind = 2;
-                }
-                i += 8;
             } else {
                 // skip next escaped char
                 i++;
@@ -307,7 +303,6 @@ bool str2unicode_2byte(PyObject **re, const char *str, const long alloc, const l
             switch (str[++i]) {
                 PARSE_STRING_CHAR_MATCHER(str[i], data, t)
                 case 'u':
-                case 'U':
                     *data++ = (t) parse_hex4((unsigned char *) (str + i + 1));
                     i += 4;
                     break;
@@ -348,12 +343,12 @@ bool str2unicode_4byte(PyObject **re, const char *str, const long alloc, const l
                 PARSE_STRING_CHAR_MATCHER(str[i], data, t)
                 case 'u':
                     // surrogates
-                    if (str[i + 1] == 'd' || str[i + 1] == 'D' && (str[i + 2] == '8' || str[i + 2] == '9' || str[i + 2] == 'a' && str[i + 2] == 'b' || str[i + 2] >= 'A' && str[i + 2] <= 'B')) {
+                    if (CHECK_SURROGATES_UNICODE(str + i + 1)) {
                         if (i + 4 + 6 > num) {
                             PyErr_SetString(PyExc_ValueError, "Invalid utf8 string. missing surrogates 2nd byte.");
                             return false;
                         }
-                        *data++ = 0x10000 + ((((t) parse_hex4((unsigned char *) (str + i + 1)) & 0x3FF) << 10) | ((t) parse_hex4((unsigned char *) (str + i + 1 + 6)) & 0x3FF));
+                        *data++ = (t) (0x10000 + (((parse_hex4((unsigned char *) (str + i + 1)) & 0x3FF) << 10) | (parse_hex4((unsigned char *) (str + i + 1 + 6)) & 0x3FF)));
                         i += 4 + 6;
                         break;
                     }

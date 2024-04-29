@@ -149,7 +149,7 @@ static bool parse_string(PyObject **item, parse_buffer *const input_buffer) {
                 skipped_bytes++;
                 if (*input_end == 'u') {
                     // surrogates
-                    if (input_end[1] == 'd' || input_end[1] == 'D' && (input_end[2] == '8' || input_end[2] == '9' || input_end[2] == 'a' && input_end[2] == 'b' || input_end[2] >= 'A' && input_end[2] <= 'B')) {
+                    if (CHECK_SURROGATES_UNICODE(input_end + 1)) {
                         if ((input_end - input_buffer->content) + 4 + 6 > input_buffer->length) {
                             PyErr_Format(PyExc_ValueError, "Failed to parse string: invalid utf8, missing surrogate pair\nposition: %d", input_end - input_buffer->content);
                             goto fail;
