@@ -146,6 +146,10 @@ static bool print_number(PyObject *item, printbuffer *const output_buffer) {
             // EDITED: 15 -> 16 for python
             // length = sprintf((char *) number_buffer, "%1.16g", d);
             dconv_d2s(d, (char *) number_buffer, 63, &length);
+            if(!output_buffer->allow_nan && (strcmp(number_buffer, "Infinity") == 0 || strcmp(number_buffer, "-Infinity") == 0 || strcmp(number_buffer, "NaN") == 0)) {
+                PyErr_SetString(PyExc_ValueError, "Number is not a valid JSON value, nan is not allowed");
+                return false;
+            }
             // /* Check whether the original double can be recovered */
             // if ((sscanf((char *) number_buffer, "%lg", &test) != 1) || !compare_double((double) test, d)) {
             //     /* If not, print with 17 decimal places of precision */
