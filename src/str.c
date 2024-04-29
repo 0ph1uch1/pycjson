@@ -2,7 +2,7 @@
 
 #include "simdutf_wrapper.h"
 
-#include <emmintrin.h> // SSE2
+// #include <emmintrin.h> // SSE2
 #include <immintrin.h> // AVX
 
 #define CHECK_NOT_LATIN1_2BYTES(a, b) (((a & 0b00011111) << 6 | (b & 0b00111111)) > 0xFF)
@@ -10,10 +10,10 @@
 
 int get_utf8_kind(const unsigned char *buf, size_t len) {
     int i;
-    const __m256i unicode_mask1 = _mm256_loadu_epi16("\\u");
+    const __m256i unicode_mask1 = _mm256_set1_epi16(0x755c); // u\ little endian
     const __m256i unicode_mask2 = _mm256_loadu_si256("0\\u\\u\\u\\u\\u\\u\\u\\u\\u\\u\\u\\u\\u\\u\\u0");
     const __m256i min_4bytes = _mm256_set1_epi8(239);
-    const __m256i max_onebyte = _mm256_set1_epi8(0b10000000);
+    const __m256i max_onebyte = _mm256_set1_epi8("\x80");
     int kind = 1;
     for (i = 0; i + 32 <= len; i += 32) {
         __m256i in = _mm256_loadu_si256((const void *) (buf + i));
@@ -40,16 +40,18 @@ int get_utf8_kind(const unsigned char *buf, size_t len) {
                 }
             }
         }
-        unsigned int result = _mm256_cmpeq_epu8_mask(in, unicode_mask1);
+        __mmask32 result = _mm256_cmpeq_epu8_mask(in, unicode_mask1);
         if (result != 0) {
-            for (int ii = 0; ii < 32; ii += 2) {
-                if (((result >> (32 - ii - 2)) & 0b11) == 0b11 && i + ii + 4 <= len && i + ii - 1 >= 0 && buf[i + ii - 1] != '\\') {
+            for (int ii = 0; ii < 32 - 2; ii += 2) {
+                if (((result >> ii) & 0b11) == 0b11 && i + ii + 4 < len && (i + ii - 1 < 0 || buf[i + ii - 1] != '\\')) {
+                    assert(buf[i + ii] == '\\');
+                    assert(buf[i + ii + 1] == 'u');
                     // surrogates
                     if (CHECK_SURROGATES_UNICODE(buf + i + ii + 2)) {
                         return 4;
                     }
                     // 4 digit unicode can only be 1 byte or 2 bytes < \uFFFF
-                    if (buf[i + ii] != '0' || buf[i + ii + 1] != '0') {
+                    if (buf[i + ii + 2] != '0' || buf[i + ii + 3] != '0') {
                         kind = 2;
                     }
                     // skip \u XXXX
@@ -58,15 +60,17 @@ int get_utf8_kind(const unsigned char *buf, size_t len) {
             }
         }
 
-        result = _mm256_cmpeq_epu8_mask(in, unicode_mask2) >> 1;
+        result = _mm256_cmpeq_epu8_mask(in, unicode_mask2);
         if (result != 0) {
-            for (int ii = 0; ii < 32; ii += 2) {
-                if (((result >> (32 - ii - 2)) & 0b11) == 0b11 && i + ii + 4 - 1 <= len && i + ii - 1 - 1 >= 0 && buf[i + ii - 1 - 1] != '\\') {
+            for (int ii = 1; ii < 32 - 2; ii += 2) {
+                if (((result >> ii) & 0b11) == 0b11 && i + ii + 4 < len && (i + ii - 1 < 0 || buf[i + ii - 1] != '\\')) {
+                    assert(buf[i + ii] == '\\');
+                    assert(buf[i + ii + 1] == 'u');
                     // surrogates
-                    if (CHECK_SURROGATES_UNICODE(buf + i + ii - 1 + 2)) {
+                    if (CHECK_SURROGATES_UNICODE(buf + i + ii + 2)) {
                         return 4;
                     }
-                    if (buf[i + ii - 1] != '0' || buf[i + ii + 1 - 1] != '0') {
+                    if (buf[i + ii + 2] != '0' || buf[i + ii + 3] != '0') {
                         kind = 2;
                     }
                     // skip \u XXXX
@@ -255,6 +259,10 @@ bool str2unicode_1byte(PyObject **re, const char *str, const long alloc, const l
         return false;
     }
     t *data = (t *) ((PyCompactUnicodeObject *) *re + 1);
+    if (num == alloc) {
+        memcpy(data, str, alloc);
+        return true;
+    }
     long real_len = 0;
     for (int i = 0; i < num; i++) {
         // no overflow
@@ -263,7 +271,6 @@ bool str2unicode_1byte(PyObject **re, const char *str, const long alloc, const l
             switch (str[++i]) {
                 PARSE_STRING_CHAR_MATCHER(str[i], data, char)
                 case 'u':
-                case 'U':
                     *data++ = (t) parse_hex4((unsigned char *) (str + i + 1));
                     i += 4;
                     break;
