@@ -1,5 +1,5 @@
-#include "pycJSON.h"
 #define PY_SSIZE_T_CLEAN
+#include "pycJSON.h"
 #include "dconv_wrapper.h"
 #include "simdutf_wrapper.h"
 #include "str.h"

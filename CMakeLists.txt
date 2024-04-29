@@ -1,0 +1,33 @@
+cmake_minimum_required(VERSION 3.18)
+# find correct python package is implemented in cmake 3.15, find other implementation is in 3.18
+project(pycjson C CXX)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_C_STANDARD 17)
+find_package(Python3 COMPONENTS Development)
+
+set(SRC_PATH ${CMAKE_CURRENT_SOURCE_DIR}/src)
+set(DEPS_PATH ${CMAKE_CURRENT_SOURCE_DIR}/deps)
+file(GLOB_RECURSE SRC_C_FILES ${SRC_PATH}/*.c)
+file(GLOB_RECURSE DEPS_CPP_FILES ${DEPS_PATH}/*.cpp)
+
+add_library(cjson SHARED ${SRC_C_FILES} ${DEPS_CPP_FILES})
+target_include_directories(cjson PUBLIC ${SRC_PATH} ${DEPS_PATH} ${Python3_INCLUDE_DIRS})
+target_link_libraries(cjson ${Python3_LIBRARIES})
+set_target_properties(cjson PROPERTIES PREFIX "")
+set_target_properties(cjson PROPERTIES LINKER_LANGUAGE C)
+set_property(TARGET cjson PROPERTY C_STANDARD 17)
+set_property(TARGET cjson PROPERTY C_STANDARD_REQUIRED ON)
+set_property(TARGET cjson PROPERTY CXX_STANDARD 17)
+set_property(TARGET cjson PROPERTY CXX_STANDARD_REQUIRED ON)
+
+if(APPLE)
+    set_target_properties(cjson PROPERTIES SUFFIX ".so")
+endif(APPLE)
+if (MSVC)
+    target_compile_options(cjson PUBLIC /std:c++17 /std:c17)
+endif(MSVC)
+# if(WIN32)
+#     set_target_properties(cjson PROPERTIES SUFFIX ".pyd")
+# endif(WIN32)
+
+install(TARGETS cjson LIBRARY DESTINATION .)
