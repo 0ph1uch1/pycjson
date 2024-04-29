@@ -40,7 +40,6 @@ typedef struct printbuffer {
 
 // forward declaration
 static bool print_value(PyObject *item, printbuffer *const output_buffer);
-static void *dconv_d2s_ptr = NULL;
 
 /* realloc printbuffer if necessary to have at least "needed" bytes more */
 static unsigned char *ensure(printbuffer *const p, size_t needed) {
@@ -146,10 +145,10 @@ static bool print_number(PyObject *item, printbuffer *const output_buffer) {
             /* Try 15 decimal places of precision to avoid nonsignificant nonzero digits */
             // EDITED: 15 -> 16 for python
             // length = sprintf((char *) number_buffer, "%1.16g", d);
-            if (dconv_d2s_ptr == NULL) {
-                dconv_d2s_init(&dconv_d2s_ptr, NO_FLAGS, "Infinity", "NaN", 'e', -324, 308, 0, 0);
+            if(!dconv_d2s(d, (char *) number_buffer, 32, &length, output_buffer->allow_nan)) {
+                PyErr_Format(PyExc_ValueError, "double-conversion failed: Invalid number: %f, allow_nan=%d", d, output_buffer->allow_nan);
+                return false;
             }
-            dconv_d2s(dconv_d2s_ptr, d, (char *) number_buffer, 32, &length);
             // /* Check whether the original double can be recovered */
             // if ((sscanf((char *) number_buffer, "%lg", &test) != 1) || !compare_double((double) test, d)) {
             //     /* If not, print with 17 decimal places of precision */
@@ -611,15 +610,9 @@ PyObject *pycJSON_Encode(PyObject *self, PyObject *args, PyObject *kwargs) {
 
     PyObject *re = PyUnicode_FromString((const char *) buffer->buffer);
     global_hooks.deallocate_self(buffer);
-    if (dconv_d2s_ptr != NULL) {
-        dconv_d2s_free(&dconv_d2s_ptr);
-    }
     return re;
 
 fail:
-    if (dconv_d2s_ptr != NULL) {
-        dconv_d2s_free(&dconv_d2s_ptr);
-    }
     return NULL;
 }
 
