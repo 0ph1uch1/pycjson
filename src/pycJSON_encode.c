@@ -108,7 +108,7 @@ static bool print_number(PyObject *item, printbuffer *const output_buffer) {
 
     int length = 0;
     size_t i = 0;
-    unsigned char number_buffer[32] = {0}; /* temporary buffer to print the number into */
+    unsigned char number_buffer[64] = {0}; /* temporary buffer to print the number into */
     unsigned char decimal_point = get_decimal_point();
 
     if (output_buffer == NULL) {
@@ -145,7 +145,7 @@ static bool print_number(PyObject *item, printbuffer *const output_buffer) {
             /* Try 15 decimal places of precision to avoid nonsignificant nonzero digits */
             // EDITED: 15 -> 16 for python
             // length = sprintf((char *) number_buffer, "%1.16g", d);
-            if(!dconv_d2s(d, (char *) number_buffer, 32, &length, output_buffer->allow_nan)) {
+            if (!dconv_d2s(d, (char *) number_buffer, 63, &length, output_buffer->allow_nan)) {
                 PyErr_Format(PyExc_ValueError, "double-conversion failed: Invalid number: %f, allow_nan=%d", d, output_buffer->allow_nan);
                 return false;
             }
