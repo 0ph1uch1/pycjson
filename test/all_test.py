@@ -1,4 +1,5 @@
 import argparse
+import faulthandler
 import importlib
 import os
 import sys
@@ -6,6 +7,7 @@ import unittest
 
 
 if __name__ == "__main__":
+    faulthandler.enable()
     parser = argparse.ArgumentParser()
     # ignore list
     parser.add_argument("--ignore", nargs="+", default=[])

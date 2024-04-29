@@ -1,6 +1,9 @@
 #ifndef DCONV_WRAPPER_H
 #define DCONV_WRAPPER_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 enum FLAGS{
   // d2s/encoding flags
   NO_FLAGS = 0,
@@ -46,5 +49,7 @@ void dconv_s2d_init(void **s2d, int flags, double empty_string_value,
 double dconv_s2d(void *s2d, const char *buffer, int length, int *processed_characters_count);
 
 void dconv_s2d_free(void **s2d);
-
+#ifdef __cplusplus
+}
+#endif
 #endif //DCONV_WRAPPER_H
