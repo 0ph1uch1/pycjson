@@ -90,12 +90,17 @@ class TestDecode(unittest.TestCase):
         bench_files = get_benchfiles_fullpath()
 
         test_cases = [json.dumps(case, ensure_ascii=False) for case in test_cases_origin]
-        for bench_file in bench_files:
-            with open(bench_file, "r", encoding='utf-8') as f:
-                test_cases.append(f.read())
 
         for case in test_cases:
             with self.subTest(msg=f'decoding_test(case={case})'):
+                re_json = json.loads(case)
+                re_cjson = cjson.loads(case)
+                self._check_obj_same(re_cjson, re_json)
+
+        for bench_file in bench_files:
+            with open(bench_file, "r", encoding='utf-8') as f:
+                case = f.read()
+            with self.subTest(msg=f'decoding_test(case={bench_file})'):
                 re_json = json.loads(case)
                 re_cjson = cjson.loads(case)
                 self._check_obj_same(re_cjson, re_json)
