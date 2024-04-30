@@ -1,7 +1,5 @@
-#define PY_SSIZE_T_CLEAN
 #include "dconv_wrapper.h"
 #include "pycJSON.h"
-#include <Python.h>
 #include <math.h>
 #include <stdbool.h>
 /* check if the given size is left to read in a given parse buffer (starting with 1) */
