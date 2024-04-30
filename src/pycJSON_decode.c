@@ -1,7 +1,14 @@
 #define PY_SSIZE_T_CLEAN
 #include "dconv_wrapper.h"
 #include "pycJSON.h"
-#include <Python.h>
+//#include <Python.h>
+#ifdef _DEBUG
+#undef _DEBUG
+#include <python.h>
+#define _DEBUG
+#else
+#include <python.h>
+#endif
 #include <math.h>
 #include <stdbool.h>
 /* check if the given size is left to read in a given parse buffer (starting with 1) */
@@ -746,7 +753,7 @@ PyObject *pycJSON_DecodeFile(PyObject *self, PyObject *args, PyObject *kwargs) {
     PyObject *file_obj = NULL;
     PyObject *read_method = NULL;
     PyObject *file_contents = NULL;
-    const char *value;
+    const char *value = NULL;
     Py_ssize_t buffer_length;
     static const char *kwlist[] = {"fp", "object_hook", NULL};
     if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O|O", (char **) kwlist, &file_obj, &buffer.object_hook)) {
@@ -766,13 +773,25 @@ PyObject *pycJSON_DecodeFile(PyObject *self, PyObject *args, PyObject *kwargs) {
     }
 
     file_contents = PyObject_CallObject(read_method, NULL);
+    if (file_contents == NULL) {
+        PyErr_SetString(PyExc_ValueError, "Failed to read file contents");
+        goto fail;
+    }
 
     // set value and buffer_length
     if (PyUnicode_Check(file_contents)) {
         value = PyUnicode_AsUTF8(file_contents);
+        if (value == NULL) {
+            PyErr_SetString(PyExc_ValueError, "Failed to parse JSON: value is NULL");
+            goto fail;
+        }
         buffer_length = strlen(value);
     } else if (PyBytes_Check(file_contents)) {
         value = PyBytes_AsString(file_contents);
+        if (value == NULL) {
+            PyErr_SetString(PyExc_ValueError, "Failed to parse JSON: value is NULL");
+            goto fail;
+        }
         buffer_length = PyBytes_Size(file_contents);
     } else {
         PyErr_SetString(PyExc_ValueError, "file content must be a string");
