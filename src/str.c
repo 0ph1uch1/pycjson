@@ -10,10 +10,10 @@
 
 int get_utf8_kind(const unsigned char *buf, size_t len) {
     int i;
-    const __m256i unicode_mask1 = _mm256_set1_epi16("\\u");
-    const __m256i unicode_mask2 = _mm256_loadu_si256("0\\u\\u\\u\\u\\u\\u\\u\\u\\u\\u\\u\\u\\u\\u\\u0");
-    const __m256i min_4bytes = _mm256_set1_epi8(239);
-    const __m256i max_onebyte = _mm256_set1_epi8("\x80");
+    const __m256i unicode_mask1 = _mm256_set1_epi16(0x755c); // little endian for \\u
+    const __m256i unicode_mask2 = _mm256_loadu_si256((__m256i_u*)"0\\u\\u\\u\\u\\u\\u\\u\\u\\u\\u\\u\\u\\u\\u\\u0");
+    const __m256i min_4bytes = _mm256_set1_epi8((char)0b11101111); // 239
+    const __m256i max_onebyte = _mm256_set1_epi8((char)0x80);
     int kind = 1;
     for (i = 0; i + 32 <= len; i += 32) {
         __m256i in = _mm256_loadu_si256((const void *) (buf + i));
