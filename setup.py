@@ -34,7 +34,7 @@ class cmake_build_ext(build_ext):
             py_executable = sys.executable
 
             cmake_args = [
-                f'-DCMAKE_BUILD_TYPE={cfg.upper()}',
+                f'-DCMAKE_BUILD_TYPE={cfg}',
                 f'-DCMAKE_INSTALL_PREFIX={extdir}',
                 f'-DPython_ROOT_DIR={os.path.dirname(os.path.dirname(os.path.dirname(os.__file__)))}',
                 f'-DPYTHON_EXECUTABLE={py_executable}',
