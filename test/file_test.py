@@ -41,7 +41,7 @@ class TestJsonFileIO(unittest.TestCase):
         for file in self.file_path:
             # keywords parse
             with open(file, "r+") as f:
-                cjson_data = cjson.load(fp=f)
+                cjson_data = cjson.load(object_hook=d4, fp=f)
                 f.seek(0)
                 json_data = json.load(f)
             self._check_obj_same(cjson_data, json_data)
