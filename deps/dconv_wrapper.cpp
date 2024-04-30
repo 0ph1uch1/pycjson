@@ -32,10 +32,10 @@ namespace double_conversion {
     int dconv_d2s(double value, char *buf, int buflen, int *strlength, bool allow_nan) {
         DoubleToStringConverter *d2s;
         if (allow_nan) {
-            static DoubleToStringConverter d2s_w_nan(DoubleToStringConverter::NO_FLAGS, "Infinity", "NaN", 'e', -324, 308, 0, 0);
+            static DoubleToStringConverter d2s_w_nan(DoubleToStringConverter::EMIT_TRAILING_DECIMAL_POINT | DoubleToStringConverter::EMIT_TRAILING_ZERO_AFTER_POINT | DoubleToStringConverter::EMIT_POSITIVE_EXPONENT_SIGN, "Infinity", "NaN", 'e', -4, 16, 0, 0);
             d2s = &d2s_w_nan;
         } else {
-            static DoubleToStringConverter d2s_wo_nan(DoubleToStringConverter::NO_FLAGS, NULL, NULL, 'e', -324, 308, 0, 0);
+            static DoubleToStringConverter d2s_wo_nan(DoubleToStringConverter::EMIT_TRAILING_DECIMAL_POINT | DoubleToStringConverter::EMIT_TRAILING_ZERO_AFTER_POINT | DoubleToStringConverter::EMIT_POSITIVE_EXPONENT_SIGN, NULL, NULL, 'e', -4, 16, 0, 0);
             d2s = &d2s_wo_nan;
         }
         StringBuilder sb(buf, buflen);

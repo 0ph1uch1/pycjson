@@ -127,7 +127,7 @@ static bool print_number(PyObject *item, printbuffer *const output_buffer) {
         }
 
         /* This checks for NaN and Infinity */
-        if (isinf(d)) {
+        if (Py_IS_INFINITY(d)) {
             if (!output_buffer->allow_nan) {
                 PyErr_SetString(PyExc_ValueError, "Number is not a valid JSON value: inf or -inf");
                 return false;
@@ -136,7 +136,7 @@ static bool print_number(PyObject *item, printbuffer *const output_buffer) {
                 length = sprintf((char *) number_buffer, "-Infinity");
             else
                 length = sprintf((char *) number_buffer, "Infinity");
-        } else if (isnan(d)) {
+        } else if (Py_IS_NAN(d)) {
             if (!output_buffer->allow_nan) {
                 PyErr_SetString(PyExc_ValueError, "Number is not a valid JSON value, nan is not allowed");
                 return false;
@@ -146,7 +146,7 @@ static bool print_number(PyObject *item, printbuffer *const output_buffer) {
             /* Try 15 decimal places of precision to avoid nonsignificant nonzero digits */
             // EDITED: 15 -> 16 for python
             // length = sprintf((char *) number_buffer, "%1.16g", d);
-            if (!dconv_d2s(d, (char *) number_buffer, 63, &length, output_buffer->allow_nan)) {
+            if (!dconv_d2s(d, (char *) number_buffer, sizeof(number_buffer), &length, output_buffer->allow_nan)) {
                 PyErr_Format(PyExc_ValueError, "double-conversion failed: Invalid number: %f, allow_nan=%d", d, output_buffer->allow_nan);
                 return false;
             }
