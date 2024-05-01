@@ -11,7 +11,11 @@ file(GLOB_RECURSE SRC_C_FILES ${SRC_PATH}/*.c)
 file(GLOB_RECURSE DEPS_CPP_FILES ${DEPS_PATH}/*.cpp)
 
 add_library(cjson SHARED ${SRC_C_FILES} ${DEPS_CPP_FILES})
-target_compile_options(cjson PUBLIC -march=native)
+
+if (not MSVC)
+    target_compile_options(cjson PUBLIC -mavx512bw -mavx512vl)
+endif (not MSVC)
+
 if (CMAKE_BUILD_TYPE STREQUAL "Release")
     message("Release mode")
     target_compile_options(cjson PUBLIC -O3)
