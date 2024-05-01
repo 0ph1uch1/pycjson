@@ -25,6 +25,17 @@
 #ifndef pycJSON__h
 #define pycJSON__h
 
+#define PY_SSIZE_T_CLEAN
+// must be included before Python.h
+#ifdef _DEBUG
+#undef _DEBUG
+#include <Python.h>
+#define _DEBUG
+#else
+#include <Python.h>
+#endif
+
+
 #ifdef __cplusplus
 extern "C" {
 #endif

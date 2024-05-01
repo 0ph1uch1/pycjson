@@ -62,12 +62,11 @@ class cmake_build_ext(build_ext):
             # We can handle some platform-specific settings at our discretion
             if platform.system() == 'Windows':
                 plat = ('x64' if platform.architecture()[0] == '64bit' else 'Win32')
-                cmake_args += [
-                    f'-DCMAKE_INSTALL_PREFIX={extdir}',
-                    # These options are likely to be needed under Windows
-                    # '-DCMAKE_WINDOWS_EXPORT_ALL_SYMBOLS=TRUE',
-                    # '-DCMAKE_RUNTIME_OUTPUT_DIRECTORY_{}={}'.format(cfg.upper(), extdir),
-                ]
+                # cmake_args += [
+                # These options are likely to be needed under Windows
+                # '-DCMAKE_WINDOWS_EXPORT_ALL_SYMBOLS=TRUE',
+                # '-DCMAKE_RUNTIME_OUTPUT_DIRECTORY_{}={}'.format(cfg.upper(), extdir),
+                # ]
                 # Assuming that Visual Studio and MinGW are supported compilers
                 if self.compiler.compiler_type == 'msvc':
                     cmake_args += [
