@@ -13,7 +13,7 @@ file(GLOB_RECURSE DEPS_CPP_FILES ${DEPS_PATH}/*.cpp)
 add_library(cjson SHARED ${SRC_C_FILES} ${DEPS_CPP_FILES})
 
 if (NOT MSVC)
-    target_compile_options(cjson PUBLIC -march=native)
+    target_compile_options(cjson PUBLIC -march=native -mavx2)
 endif (NOT MSVC)
 
 if (CMAKE_BUILD_TYPE STREQUAL "Release")

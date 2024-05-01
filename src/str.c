@@ -4,7 +4,7 @@
 
 // #include <emmintrin.h> // SSE2
 #include <immintrin.h> // AVX
-
+#include <stdint.h>
 #define CHECK_NOT_LATIN1_2BYTES(a, b) (((a & 0b00011111) << 6 | (b & 0b00111111)) > 0xFF)
 
 
@@ -44,7 +44,7 @@ int get_utf8_kind(const unsigned char *buf, size_t len) {
         // check unicode escape \uXXXX
 
         // unicode starting at even position
-        __mmask32 result = _mm256_cmpeq_epu8_mask(in, unicode_mask1);
+        uint32_t result = _mm256_movemask_epi8(_mm256_cmpeq_epi8(in, unicode_mask1));
         if ((result & (result >> 1)) != 0) {
             for (int ii = 0; ii < 32 - 1; ii += 2) {
                 if (buf[i + ii] == '\\' && buf[i + ii + 1] == 'u' && (i + ii - 1 < 0 || buf[i + ii - 1] != '\\')) {
@@ -62,7 +62,7 @@ int get_utf8_kind(const unsigned char *buf, size_t len) {
         }
 
         // unicode starting at odd position
-        result = (_mm256_cmpeq_epu8_mask(in, unicode_mask2) >> 1) & 0b1111111111111111111111111111111;
+        result = _mm256_movemask_epi8(_mm256_cmpeq_epi8(in, unicode_mask2)) & 0b01111111111111111111111111111110;
         if ((result & (result >> 1)) != 0) {
             for (int ii = 1; ii < 32 - 2; ii += 2) {
                 if (buf[i + ii] == '\\' && buf[i + ii + 1] == 'u' && (i + ii - 1 < 0 || buf[i + ii - 1] != '\\')) {
