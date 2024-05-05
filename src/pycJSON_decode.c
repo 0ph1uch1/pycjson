@@ -1,4 +1,3 @@
-#define PY_SSIZE_T_CLEAN
 #include "dconv_wrapper.h"
 #include "pycJSON.h"
 //#include <Python.h>

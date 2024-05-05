@@ -1,6 +1,5 @@
-#define PY_SSIZE_T_CLEAN
+#include "pycJSON.h"
 #include "version.h"
-#include <Python.h>
 
 #define MODULE_STATE(o) ((modulestate *) PyModule_GetState(o))
 
