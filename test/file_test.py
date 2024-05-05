@@ -5,10 +5,11 @@ import unittest
 
 def test_encode_option(files):
     import cjson
+    import tempfile
     for file in files:
         with open(file, "r", encoding="utf-8") as f:
             json_data = json.load(f)
-        with open(file, "r", encoding="ascii") as f:
+        with tempfile.NamedTemporaryFile(mode="w+", encoding='ascii') as f:
             cjson.dump(json_data, f)
 
 def test_decode_option(files):
