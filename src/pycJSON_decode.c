@@ -1,13 +1,5 @@
 #include "dconv_wrapper.h"
 #include "pycJSON.h"
-#include <Python.h>
-// #ifdef _DEBUG
-// #undef _DEBUG
-// #include <python.h>
-// #define _DEBUG
-// #else
-// #include <ython.h>
-// #endif
 #include <math.h>
 #include <stdbool.h>
 /* check if the given size is left to read in a given parse buffer (starting with 1) */
