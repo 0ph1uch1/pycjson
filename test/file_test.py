@@ -3,6 +3,7 @@ import sys
 import json
 import unittest
 
+
 def test_encode_option(files):
     import cjson
     import tempfile
@@ -12,11 +13,13 @@ def test_encode_option(files):
         with tempfile.NamedTemporaryFile(mode="w+", encoding='ascii') as f:
             cjson.dump(json_data, f)
 
+
 def test_decode_option(files):
     import cjson
     for file in files:
         with open(file, "r", encoding="ascii") as f:
             cjson_data = cjson.load(f)
+
 
 class TestJsonFileIO(unittest.TestCase):
     def _check_obj_same(self, a, b):
@@ -45,7 +48,7 @@ class TestJsonFileIO(unittest.TestCase):
             if "a" in obj:
                 return A(obj["a"])
             return obj
-      
+
         for file in self.file_path:
             # test parse keyword
             with open(file, "r+", encoding="utf-8") as f:
@@ -53,21 +56,19 @@ class TestJsonFileIO(unittest.TestCase):
                 f.seek(0)
                 json_data = json.load(f)
             self._check_obj_same(cjson_data, json_data)
-            
-            
+
             with open(file, "r+", encoding="utf-8") as f:
                 cjson_data = cjson.load(f)
                 f.seek(0)
                 json_data = json.load(f)
             self._check_obj_same(cjson_data, json_data)
-    
-    
+
     def test_json_dump(self):
         import cjson
         import tempfile
-  
+
         for data in self.datas:
-        # test parse keyword
+            # test parse keyword
             with tempfile.NamedTemporaryFile(mode="w+", encoding='utf-8') as f:
                 cjson.dump(skipkeys=False, fp=f, obj=data)
                 f.seek(0)
@@ -77,7 +78,7 @@ class TestJsonFileIO(unittest.TestCase):
                 f.seek(0)
                 json_data = json.load(f)
             self._check_obj_same(cjson_data, json_data)
-            
+
             with tempfile.NamedTemporaryFile(mode="w+", encoding='utf-8') as f:
                 cjson.dump(data, f)
                 f.seek(0)
