@@ -1,7 +1,6 @@
 #include "double-conversion.hpp"
 
 #include <Python.h>
-#include <pymath.h>
 
 enum FLAGS {
     // d2s/encoding flags

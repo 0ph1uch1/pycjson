@@ -126,7 +126,6 @@ static parse_buffer *skip_utf8_bom(parse_buffer *const buffer) {
 static bool parse_string(PyObject **item, parse_buffer *const input_buffer) {
     assert(item);
     const unsigned char *input_pointer = buffer_at_offset(input_buffer) + 1;
-    const unsigned char *input_end = buffer_at_offset(input_buffer) + 1;
 
     unsigned char *buffer_ptr = NULL;
     unsigned char parse_string_stack_buffer[STACK_BUFFER_SIZE];
@@ -140,28 +139,12 @@ static bool parse_string(PyObject **item, parse_buffer *const input_buffer) {
 
     {
         size_t skipped_bytes = 0;
-        while (((Py_ssize_t) (input_end - input_buffer->content) < input_buffer->length) && (*input_end != '\"')) {
-            if (*input_end == '\\') {
-                input_end++;
-                skipped_bytes++;
-                if (*input_end == 'u') {
-                    // surrogates
-                    if (CHECK_SURROGATES_UNICODE(input_end + 1)) {
-                        if ((input_end - input_buffer->content) + 4 + 6 > input_buffer->length) {
-                            PyErr_Format(PyExc_ValueError, "Failed to parse string: invalid utf8, missing surrogate pair\nposition: %d", input_end - input_buffer->content);
-                            goto fail;
-                        }
-                        input_end += 6;
-                        skipped_bytes += 6;
-                    }
-                    input_end += 4;
-                    skipped_bytes += 4;
-                }
-            }
-            input_end++;
+        size_t num = 0;
+        if(!count_skipped(input_pointer, input_buffer->length - input_buffer->offset, &skipped_bytes, &num)) {
+            goto fail;
         }
-        size_t num = input_end - buffer_at_offset(input_buffer) - 1;
-        size_t alloc = count_utf8(buffer_at_offset(input_buffer) + 1, num) - skipped_bytes;
+        // size_t num = input_end - buffer_at_offset(input_buffer) - 1;
+        size_t alloc = count_utf8(input_pointer, num) - skipped_bytes;
 
         int kind = get_utf8_kind((const char *) input_pointer, num);
         switch (kind) {
@@ -169,24 +152,23 @@ static bool parse_string(PyObject **item, parse_buffer *const input_buffer) {
                 if (!str2unicode_1byte(item, (const char *) input_pointer, alloc, num)) {
                     goto fail;
                 }
-                input_buffer->offset = (Py_ssize_t) (input_end - input_buffer->content);
                 break;
             case 2:
                 if (!str2unicode_2byte(item, (const char *) input_pointer, alloc, num)) {
                     goto fail;
                 }
-                input_buffer->offset = (Py_ssize_t) (input_end - input_buffer->content);
                 break;
             case 4:
                 if (!str2unicode_4byte(item, (const char *) input_pointer, alloc, num)) {
                     goto fail;
                 }
-                input_buffer->offset = (Py_ssize_t) (input_end - input_buffer->content);
                 break;
             default:
                 PyErr_Format(PyExc_ValueError, "Failed to parse string: invalid utf8\nposition: %d", input_buffer->offset);
                 goto fail;
         }
+        // + 1 for ending "
+        input_buffer->offset += num + 1;
     }
     PARSE_STRING_FINALIZE;
 
@@ -394,7 +376,7 @@ static bool parse_object(PyObject **item, parse_buffer *const input_buffer) {
         buffer_skip_whitespace(input_buffer);
 
         if (cannot_access_at_index(input_buffer, 0) || (buffer_at_offset(input_buffer)[0] != ':')) {
-            PyErr_Format(PyExc_ValueError, "Failed to parse dictionary: expected colon\nposition: %d", input_buffer->offset);
+            PyErr_Format(PyExc_ValueError, "Failed to parse dictionary: expect colon\nposition: %d", input_buffer->offset);
             goto fail; /* invalid object */
         }
 
@@ -522,7 +504,7 @@ PyObject *pycJSON_Decode(PyObject *self, PyObject *args, PyObject *kwargs) {
     Py_ssize_t buffer_length;
     static const char *kwlist[] = {"s", "object_hook", NULL};
     if (!PyArg_ParseTupleAndKeywords(args, kwargs, "s#|O", (char **) kwlist, &value, &buffer_length, &buffer.object_hook)) {
-        PyErr_Format(PyExc_TypeError, "Failed to parse JSON: invalid argument, expected str / bytes-like object");
+        if(!PyErr_Occurred()) PyErr_Format(PyExc_TypeError, "Failed to parse JSON: invalid argument, expected str / bytes-like object");
         goto fail;
     }
 

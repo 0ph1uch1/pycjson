@@ -7,13 +7,200 @@
 #include <stdint.h>
 #define CHECK_NOT_LATIN1_2BYTES(a, b) (((a & 0b00011111) << 6 | (b & 0b00111111)) > 0xFF)
 
+// input must be uint
+// int BitCount(unsigned int u) {
+//     unsigned int uCount = u - ((u >> 1) & 033333333333) - ((u >> 2) & 011111111111);
+//     return ((uCount + (uCount >> 3)) & 030707070707) % 63;
+// }
+
+bool count_skipped(const char *buf, size_t max_len, size_t *skipped, size_t *len) {
+    const __m256i escape_mask = _mm256_set1_epi8('\\');
+    const __m256i end_mask = _mm256_set1_epi8('\"');
+    const __m256i u_mask = _mm256_set1_epi8('u');
+    // const __m256i utf8_2_mask = _mm256_set1_epi8(0b00000011);
+    // const __m256i utf8_3_mask = _mm256_set1_epi8(0b00000111);
+    // const __m256i utf8_4_mask = _mm256_set1_epi8(0b00001111);
+    *skipped = 0;
+    int i = 0;
+    int skip_next = 0;
+
+    for (; i + 32 < max_len; i += 32) {
+        __m256i batch = _mm256_loadu_si256((__m256i_u *) (buf + i));
+        // __mmask32 escape_result = _mm256_cmpeq_epi8_mask(batch, escape_mask);
+        // __mmask32 end_result = _mm256_cmpeq_epi8_mask(batch, end_mask);
+        // __mmask32 u_result = _mm256_cmpeq_epi8_mask(batch, u_mask);
+        __mmask32 escape_result = _mm256_movemask_epi8(_mm256_cmpeq_epi8(batch, escape_mask));
+        __mmask32 end_result = _mm256_movemask_epi8(_mm256_cmpeq_epi8(batch, end_mask));
+        __mmask32 u_result = _mm256_movemask_epi8(_mm256_cmpeq_epi8(batch, u_mask));
+        // mask out first unicode
+        if (skip_next > 0) {
+            const unsigned int mask = 0b11111111111111111111111111111111 ^ ((1 << skip_next) - 1);
+            escape_result = escape_result & mask;
+            end_result = end_result & mask;
+            u_result = u_result & mask;
+        }
+        if (escape_result == 0 && end_result == 0) {
+            skip_next = 0;
+            continue;
+        }
+        if (end_result != 0) {
+            i += skip_next;
+            skip_next = 0;
+            if (escape_result != 0) {
+                if (((~(end_result & (escape_result << 1))) & end_result) != 0) {
+                    // there is real ending with some escaped sequence
+                    if (u_result != 0) {
+                        // some unicodes
+                        while (buf[i] != '\"') {
+                            if (buf[i] == '\\') {
+                                *skipped += 1;
+                                i++;
+                                if (i > 31) {
+                                    // skip the escaped char in next batch
+                                    skip_next = 1;
+                                }
+                                if (buf[i] == 'u') {
+                                    if (i + 4 >= max_len) {
+                                        PyErr_SetString(PyExc_ValueError, "Invalide Utf8 sequence: invalid unicode escaped sequence");
+                                        return false;
+                                    }
+                                    *skipped += 4;
+                                    i++;
+                                    if (i + 4 > 31) {
+                                        skip_next = i + 4 - 32;
+                                    }
+                                    if (CHECK_SURROGATES_UNICODE(buf + i)) {
+                                        if (i + 4 + 6 >= max_len) {
+                                            PyErr_SetString(PyExc_ValueError, "Invalid Utf8 sequence: invalid unicode escaped surrogate sequence");
+                                            return false;
+                                        }
+                                        *skipped += 6;
+                                        if (i + 4 + 6 > 31) {
+                                            skip_next = i + 4 + 6 - 32;
+                                        }
+                                        i += 6;
+                                    }
+                                    i += 3;
+                                } else {
+                                    // do nothing
+                                }
+                            }
+                            i++;
+                        }
+                    } else {
+                        while (buf[i] != '\"') {
+                            if (buf[i] == '\\') {
+                                *skipped += 1;
+                                i++;
+                            }
+                            i++;
+                        }
+                    }
+                    *len = i - 1 + 1;
+                    return true;
+                }
+                // there is not ending but some escapes
+                // handled by following block
+            } else {
+                // real ending without any escape
+                while (buf[i++] != '\"') {}
+                *len = i - 1 - 1 + 1;
+                return true;
+            }
+        }
+        // escape_result != 0
+        // there are some escaped sequence without ending
+        if (u_result != 0) {
+            int j = skip_next;
+            skip_next = 0;
+            for (; j < 32; j++) {
+                if (buf[i + j] == '\\') {
+                    *skipped += 1;
+                    j++;
+                    if (j > 31) {
+                        skip_next = 1;
+                    }
+                    if (buf[i + j] == 'u') {
+                        if (i + j + 4 >= max_len) {
+                            PyErr_SetString(PyExc_ValueError, "invalide Utf8 Sequence: invalide unicode escaped sequence");
+                            return false;
+                        }
+                        *skipped += 4;
+                        if (j + 4 > 31) {
+                            skip_next = j + 4 - 32;
+                        }
+                        j++;
+                        if (CHECK_SURROGATES_UNICODE(buf + i + j)) {
+                            if (i + j + 4 + 6 >= max_len) {
+                                PyErr_SetString(PyExc_ValueError, "invalid utf8 sequence");
+                                return false;
+                            }
+                            *skipped += 6;
+                            if (j + 4 + 6 > 31) {
+                                skip_next = j + 4 + 6 - 32;
+                            }
+                            j += 6;
+                        }
+                        j += 3;
+                    }
+                }
+            }
+        } else {
+            skip_next = 0;
+            // if(escape_result & (escape_result >> 1) == 0) {
+            //     // fast path
+            //     *skipped += BitCount(escape_result);
+            // }else {
+            for (int j = 0; j < 32; j++) {
+                if ((escape_result >> j) & 0b1) {
+                    *skipped += 1;
+                    j++;
+                    if (j > 31) {
+                        skip_next = 1;
+                    }
+                }
+            }
+            // }
+        }
+    }
+    i += skip_next;
+    for (; i < max_len; i++) {
+        if (buf[i] == '"') {
+            *len = i - 1 + 1;
+            return true;
+        }
+        if (buf[i] == '\\') {
+            i++;
+            *skipped += 1;
+            if (buf[i] == 'u') {
+                if (i + 4 >= max_len) {
+                    PyErr_SetString(PyExc_ValueError, "Invalid Utf8 sequence: invalid unicode escaped sequence");
+                    return false;
+                }
+                *skipped += 4;
+                i++;
+                if (CHECK_SURROGATES_UNICODE(buf + i)) {
+                    if (i + 4 + 6 >= max_len) {
+                        PyErr_SetString(PyExc_ValueError, "Invalid Utf8 sequence: missing surrogates 2nd byte");
+                        return false;
+                    }
+                    *skipped += 6;
+                    i += 6;
+                }
+                i += 3;
+            }
+        }
+    }
+    PyErr_SetString(PyExc_ValueError, "Invalid json: expect ending quote");
+    return false;
+}
 
 int get_utf8_kind(const unsigned char *buf, size_t len) {
     int i;
     const __m256i unicode_mask1 = _mm256_set1_epi16(0x755c); // little endian for \\u
-    const __m256i unicode_mask2 = _mm256_loadu_si256((__m256i_u*)"0\\u\\u\\u\\u\\u\\u\\u\\u\\u\\u\\u\\u\\u\\u\\u0");
-    const __m256i min_4bytes = _mm256_set1_epi8((char)0b11101111); // 239
-    const __m256i max_onebyte = _mm256_set1_epi8((char)0x80);
+    const __m256i unicode_mask2 = _mm256_loadu_si256((__m256i_u *) "0\\u\\u\\u\\u\\u\\u\\u\\u\\u\\u\\u\\u\\u\\u\\u0");
+    const __m256i min_4bytes = _mm256_set1_epi8((char) 0b11101111); // 239
+    const __m256i max_onebyte = _mm256_set1_epi8((char) 0x80);
     int kind = 1;
     for (i = 0; i + 32 <= len; i += 32) {
         __m256i in = _mm256_loadu_si256((const void *) (buf + i));
