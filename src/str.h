@@ -1,7 +1,7 @@
 #ifndef STR_H
 #define STR_H
-#include <stdbool.h>
 #include "pycJSON.h"
+#include <stdbool.h>
 
 #define CHECK_SURROGATES_UNICODE(buf)        \
     (((buf)[0] == 'd' || (buf)[0] == 'D') && \

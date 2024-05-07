@@ -140,7 +140,7 @@ static bool parse_string(PyObject **item, parse_buffer *const input_buffer) {
     {
         size_t skipped_bytes = 0;
         size_t num = 0;
-        if(!count_skipped(input_pointer, input_buffer->length - input_buffer->offset, &skipped_bytes, &num)) {
+        if (!count_skipped(input_pointer, input_buffer->length - input_buffer->offset, &skipped_bytes, &num)) {
             goto fail;
         }
         // size_t num = input_end - buffer_at_offset(input_buffer) - 1;
@@ -504,7 +504,7 @@ PyObject *pycJSON_Decode(PyObject *self, PyObject *args, PyObject *kwargs) {
     Py_ssize_t buffer_length;
     static const char *kwlist[] = {"s", "object_hook", NULL};
     if (!PyArg_ParseTupleAndKeywords(args, kwargs, "s#|O", (char **) kwlist, &value, &buffer_length, &buffer.object_hook)) {
-        if(!PyErr_Occurred()) PyErr_Format(PyExc_TypeError, "Failed to parse JSON: invalid argument, expected str / bytes-like object");
+        if (!PyErr_Occurred()) PyErr_Format(PyExc_TypeError, "Failed to parse JSON: invalid argument, expected str / bytes-like object");
         goto fail;
     }
 
