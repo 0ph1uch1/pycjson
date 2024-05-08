@@ -155,18 +155,18 @@ bool count_skipped(const char *buf, size_t max_len, size_t *skipped, size_t *len
             int dup = BitCount((even_take >> 1) & odd_take);
             // number of backslash minus escaped backslash
             *skipped += BitCount(x) - (BitCount(even_take) + BitCount(odd_take) - dup);
-            if(x == 0xffffffff){
+            if (x == 0xffffffff) {
                 // 32 ending backslash
-            }else if(x == 0x7fffffff){
+            } else if (x == 0x7fffffff) {
                 // 31 ending backslash
                 skip_next = 1;
-            }else {
+            } else {
                 // reverse x bits-wise
                 x = (x >> 16) | (x << 16);
                 x = ((x & 0x00FF00FF) << 8) | ((x & 0xFF00FF00) >> 8);
                 x = ((x & 0x0F0F0F0F) << 4) | ((x & 0xF0F0F0F0) >> 4);
                 x = ((x & 0x33333333) << 2) | ((x & 0xCCCCCCCC) >> 2);
-                x= ((x & 0x55555555) << 1) | ((x & 0xAAAAAAAA) >> 1);
+                x = ((x & 0x55555555) << 1) | ((x & 0xAAAAAAAA) >> 1);
 
                 x = ~x;
                 x = x ^ (x - 1);
@@ -235,13 +235,13 @@ int get_utf8_kind(const unsigned char *buf, size_t len) {
     int kind = 1;
     for (i = 0; i + 32 <= len; i += 32) {
         __m256i in = _mm256_loadu_si256((const void *) (buf + i));
-        __m256i cond = _mm256_cmpgt_epi8(in, min_4bytes) & _mm256_cmpgt_epi8(m256_zero, in);
+        __m256i cond = _mm256_and_si256(_mm256_cmpgt_epi8(in, min_4bytes), _mm256_cmpgt_epi8(m256_zero, in));
         if (_mm256_movemask_epi8(cond) != 0){
             // it is 4 bytes
             return 4;
         }
         // if not all bytes are utf8 1bytes sequence in this batch
-        cond = _mm256_cmpgt_epi8(in, max_onebyte) & _mm256_cmpgt_epi8(m256_zero, in);
+        cond = _mm256_and_si256(_mm256_cmpgt_epi8(in, max_onebyte), _mm256_cmpgt_epi8(m256_zero, in));
         if (_mm256_movemask_epi8(cond)) {
             for (int j = 0; j < 32; j++) {
                 if (buf[i + j] & 0b10000000) {
@@ -603,34 +603,3 @@ bool str2unicode_4byte(PyObject **re, const char *str, const long alloc, const l
     assert(real_len == alloc); // TODO remove real_len after testing
     return true;
 }
-
-// int test(unsigned int x) {
-//     unsigned odd = x & 0x55555555;
-//     unsigned even = x & 0xAAAAAAAA;
-//     unsigned int even_take = even & (odd >> 1);
-//     unsigned int odd_take = odd & (even >> 1);
-//     int dup = bitcount((even_take >> 1) & odd_take);
-//     return bitcount(even_take) + bitcount(odd_take) - dup;
-// }
-
-// int test2(unsigned int x) {
-//     if x == 0xffffffff{
-//         return 32;
-//     }
-//     if x == 0x7fffffff{
-//         return 31;
-//     }
-//     x = reverse_bits(x);
-//     x = ~x;
-//     x = x ^ (x - 1);
-//     x += 1;
-//     switch (x) {
-//         case 1 << 1:
-//             return 0;
-//         case 1 << 2:
-//             return 1;
-//             //    ...
-//         default:
-//             assert(false);
-//     }
-// }
