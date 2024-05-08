@@ -2,11 +2,11 @@
 
 #include "simdutf_wrapper.h"
 
-// #include <emmintrin.h> // SSE2
-#include <immintrin.h> // AVX
+#include "str-utils.h"
 #include <stdint.h>
 #define CHECK_NOT_LATIN1_2BYTES(a, b) (((a & 0b00011111) << 6 | (b & 0b00111111)) > 0xFF)
 
+// https://web.archive.org/web/20151229003112/http://blogs.msdn.com/b/jeuge/archive/2005/06/08/hakmem-bit-count.aspx
 // input must be uint
 int BitCount(unsigned int u) {
     unsigned int uCount = u - ((u >> 1) & 033333333333) - ((u >> 2) & 011111111111);
@@ -26,6 +26,7 @@ bool count_skipped(const char *buf, size_t max_len, size_t *skipped, size_t *len
 
     for (; i + 32 < max_len; i += 32) {
         __m256i batch = _mm256_loadu_si256((__m256i *) (buf + i));
+        // for avx512
         // __mmask32 escape_result = _mm256_cmpeq_epi8_mask(batch, escape_mask);
         // __mmask32 end_result = _mm256_cmpeq_epi8_mask(batch, end_mask);
         // __mmask32 u_result = _mm256_cmpeq_epi8_mask(batch, u_mask);
@@ -235,14 +236,12 @@ int get_utf8_kind(const unsigned char *buf, size_t len) {
     int kind = 1;
     for (i = 0; i + 32 <= len; i += 32) {
         __m256i in = _mm256_loadu_si256((const void *) (buf + i));
-        __m256i cond = _mm256_and_si256(_mm256_cmpgt_epi8(in, min_4bytes), _mm256_cmpgt_epi8(m256_zero, in));
-        if (_mm256_movemask_epi8(cond) != 0){
+        if (mm256_greater8u_mask(in, min_4bytes) != 0) {
             // it is 4 bytes
             return 4;
         }
         // if not all bytes are utf8 1bytes sequence in this batch
-        cond = _mm256_and_si256(_mm256_cmpgt_epi8(in, max_onebyte), _mm256_cmpgt_epi8(m256_zero, in));
-        if (_mm256_movemask_epi8(cond)) {
+        if (mm256_greater8u_mask(in, max_onebyte)) {
             for (int j = 0; j < 32; j++) {
                 if (buf[i + j] & 0b10000000) {
                     if (buf[i + j] & 0b01000000) {
