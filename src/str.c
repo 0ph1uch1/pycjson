@@ -25,7 +25,7 @@ bool count_skipped(const char *buf, size_t max_len, size_t *skipped, size_t *len
     int skip_next = 0;
 
     for (; i + 32 < max_len; i += 32) {
-        __m256i batch = _mm256_loadu_si256((__m256i_u *) (buf + i));
+        __m256i batch = _mm256_loadu_si256((__m256i *) (buf + i));
         // __mmask32 escape_result = _mm256_cmpeq_epi8_mask(batch, escape_mask);
         // __mmask32 end_result = _mm256_cmpeq_epi8_mask(batch, end_mask);
         // __mmask32 u_result = _mm256_cmpeq_epi8_mask(batch, u_mask);
@@ -228,7 +228,7 @@ bool count_skipped(const char *buf, size_t max_len, size_t *skipped, size_t *len
 int get_utf8_kind(const unsigned char *buf, size_t len) {
     int i;
     const __m256i unicode_mask1 = _mm256_set1_epi16(0x755c); // little endian for \\u
-    const __m256i unicode_mask2 = _mm256_loadu_si256((__m256i_u *) "0\\u\\u\\u\\u\\u\\u\\u\\u\\u\\u\\u\\u\\u\\u\\u0");
+    const __m256i unicode_mask2 = _mm256_loadu_si256((__m256i *) "0\\u\\u\\u\\u\\u\\u\\u\\u\\u\\u\\u\\u\\u\\u\\u0");
     const __m256i min_4bytes = _mm256_set1_epi8((char) 0b11101111); // -17 or 239U
     const __m256i m256_zero = _mm256_set1_epi8((char) 0);           // 0
     const __m256i max_onebyte = _mm256_set1_epi8((char) 0x80);      // -128 or 128U
