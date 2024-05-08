@@ -8,10 +8,10 @@
 #define CHECK_NOT_LATIN1_2BYTES(a, b) (((a & 0b00011111) << 6 | (b & 0b00111111)) > 0xFF)
 
 // input must be uint
-// int BitCount(unsigned int u) {
-//     unsigned int uCount = u - ((u >> 1) & 033333333333) - ((u >> 2) & 011111111111);
-//     return ((uCount + (uCount >> 3)) & 030707070707) % 63;
-// }
+int BitCount(unsigned int u) {
+    unsigned int uCount = u - ((u >> 1) & 033333333333) - ((u >> 2) & 011111111111);
+    return ((uCount + (uCount >> 3)) & 030707070707) % 63;
+}
 
 bool count_skipped(const char *buf, size_t max_len, size_t *skipped, size_t *len) {
     const __m256i escape_mask = _mm256_set1_epi8('\\');
@@ -147,20 +147,50 @@ bool count_skipped(const char *buf, size_t max_len, size_t *skipped, size_t *len
             }
         } else {
             skip_next = 0;
-            // if(escape_result & (escape_result >> 1) == 0) {
-            //     // fast path
-            //     *skipped += BitCount(escape_result);
-            // }else {
-            for (int j = 0; j < 32; j++) {
-                if ((escape_result >> j) & 0b1) {
-                    *skipped += 1;
-                    j++;
-                    if (j > 31) {
+            unsigned int x = escape_result;
+            unsigned odd = x & 0x55555555;
+            unsigned even = x & 0xAAAAAAAA;
+            unsigned int even_take = even & (odd >> 1);
+            unsigned int odd_take = odd & (even >> 1);
+            int dup = BitCount((even_take >> 1) & odd_take);
+            // number of backslash minus escaped backslash
+            *skipped += BitCount(x) - (BitCount(even_take) + BitCount(odd_take) - dup);
+            if(x == 0xffffffff){
+                // 32 ending backslash
+            }else if(x == 0x7fffffff){
+                // 31 ending backslash
+                skip_next = 1;
+            }else {
+                // reverse x bits-wise
+                x = (x >> 16) | (x << 16);
+                x = ((x & 0x00FF00FF) << 8) | ((x & 0xFF00FF00) >> 8);
+                x = ((x & 0x0F0F0F0F) << 4) | ((x & 0xF0F0F0F0) >> 4);
+                x = ((x & 0x33333333) << 2) | ((x & 0xCCCCCCCC) >> 2);
+                x= ((x & 0x55555555) << 1) | ((x & 0xAAAAAAAA) >> 1);
+
+                x = ~x;
+                x = x ^ (x - 1);
+                x += 1;
+                switch (x) {
+                    // if there are odd number of ending backslash
+                    case 1 << 2:
+                    case 1 << 4:
+                    case 1 << 6:
+                    case 1 << 8:
+                    case 1 << 10:
+                    case 1 << 12:
+                    case 1 << 14:
+                    case 1 << 16:
+                    case 1 << 18:
+                    case 1 << 20:
+                    case 1 << 22:
+                    case 1 << 24:
+                    case 1 << 26:
+                    case 1 << 28:
+                    case 1 << 30:
                         skip_next = 1;
-                    }
                 }
             }
-            // }
         }
     }
     i += skip_next;
