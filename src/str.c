@@ -199,17 +199,20 @@ int get_utf8_kind(const unsigned char *buf, size_t len) {
     int i;
     const __m256i unicode_mask1 = _mm256_set1_epi16(0x755c); // little endian for \\u
     const __m256i unicode_mask2 = _mm256_loadu_si256((__m256i_u *) "0\\u\\u\\u\\u\\u\\u\\u\\u\\u\\u\\u\\u\\u\\u\\u0");
-    const __m256i min_4bytes = _mm256_set1_epi8((char) 0b11101111); // 239
-    const __m256i max_onebyte = _mm256_set1_epi8((char) 0x80);
+    const __m256i min_4bytes = _mm256_set1_epi8((char) 0b11101111); // -17 or 239U
+    const __m256i m256_zero = _mm256_set1_epi8((char) 0);           // 0
+    const __m256i max_onebyte = _mm256_set1_epi8((char) 0x80);      // -128 or 128U
     int kind = 1;
     for (i = 0; i + 32 <= len; i += 32) {
         __m256i in = _mm256_loadu_si256((const void *) (buf + i));
-        if (_mm256_cmpgt_epu8_mask(in, min_4bytes) != 0) {
+        __m256i cond = _mm256_cmpgt_epi8(in, min_4bytes) & _mm256_cmpgt_epi8(m256_zero, in);
+        if (_mm256_movemask_epi8(cond) != 0){
             // it is 4 bytes
             return 4;
         }
         // if not all bytes are utf8 1bytes sequence in this batch
-        if (_mm256_cmpgt_epu8_mask(in, max_onebyte) != 0) {
+        cond = _mm256_cmpgt_epi8(in, max_onebyte) & _mm256_cmpgt_epi8(m256_zero, in);
+        if (_mm256_movemask_epi8(cond)) {
             for (int j = 0; j < 32; j++) {
                 if (buf[i + j] & 0b10000000) {
                     if (buf[i + j] & 0b01000000) {
@@ -570,3 +573,34 @@ bool str2unicode_4byte(PyObject **re, const char *str, const long alloc, const l
     assert(real_len == alloc); // TODO remove real_len after testing
     return true;
 }
+
+// int test(unsigned int x) {
+//     unsigned odd = x & 0x55555555;
+//     unsigned even = x & 0xAAAAAAAA;
+//     unsigned int even_take = even & (odd >> 1);
+//     unsigned int odd_take = odd & (even >> 1);
+//     int dup = bitcount((even_take >> 1) & odd_take);
+//     return bitcount(even_take) + bitcount(odd_take) - dup;
+// }
+
+// int test2(unsigned int x) {
+//     if x == 0xffffffff{
+//         return 32;
+//     }
+//     if x == 0x7fffffff{
+//         return 31;
+//     }
+//     x = reverse_bits(x);
+//     x = ~x;
+//     x = x ^ (x - 1);
+//     x += 1;
+//     switch (x) {
+//         case 1 << 1:
+//             return 0;
+//         case 1 << 2:
+//             return 1;
+//             //    ...
+//         default:
+//             assert(false);
+//     }
+// }
