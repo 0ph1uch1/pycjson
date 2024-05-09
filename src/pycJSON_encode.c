@@ -623,7 +623,83 @@ fail:
 }
 
 PyObject *pycJSON_FileEncode(PyObject *self, PyObject *args, PyObject *kwargs) {
-    Py_RETURN_NOTIMPLEMENTED;
+    static const size_t default_buffer_size = CJSON_PRINTBUFFER_MAX_STACK_SIZE;
+    printbuffer buffer[1];
+
+    memset(buffer, 0, sizeof(buffer));
+
+    unsigned char stack_buffer[CJSON_PRINTBUFFER_MAX_STACK_SIZE];
+
+    static const char *kwlist[] = {"obj", "fp", "format", "skipkeys", "allow_nan", "separators", "default", NULL};
+    PyObject *arg;
+    buffer->format = false;
+    buffer->skipkeys = false;
+    buffer->allow_nan = true;
+    buffer->item_separator = ",";
+    buffer->key_separator = ":";
+    buffer->default_func = NULL;
+    PyObject *file_obj;
+    PyObject *write_method;
+    PyObject *re = NULL;
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "OO|ppp(ss)O", (char **) kwlist, &arg, &file_obj, &buffer->format, &buffer->skipkeys, &buffer->allow_nan, &buffer->item_separator, &buffer->key_separator, &buffer->default_func)) {
+        if (!PyErr_Occurred()) PyErr_SetString(PyExc_TypeError, "Failed to parse arguments");
+        goto fail;
+    }
+
+    write_method = PyObject_GetAttrString(file_obj, "write");
+    if (!PyCallable_Check(write_method)) {
+        PyErr_SetString(PyExc_TypeError, "'write' method is not callable");
+        goto fail;
+    }
+
+    if (buffer->default_func && !PyCallable_Check(buffer->default_func)) {
+        PyErr_SetString(PyExc_TypeError, "default_func must be callable");
+        goto fail;
+    }
+    /* create buffer */
+    buffer->buffer = stack_buffer; //(unsigned char *) global_hooks.allocate(default_buffer_size);
+    buffer->length = default_buffer_size;
+    buffer->hooks = global_hooks;
+    if (!print_value(arg, buffer)) {
+        if (!PyErr_Occurred()) PyErr_SetString(PyExc_TypeError, "Failed to encode object");
+        goto fail;
+    }
+
+    update_offset(buffer);
+
+    re = PyUnicode_FromString((const char *) buffer->buffer);
+    global_hooks.deallocate_self(buffer);
+
+
+    if (!PyUnicode_Check(re)) {
+        PyErr_SetString(PyExc_TypeError, "file content must be a string");
+        goto fail;
+    }
+
+    PyObject *argtuple = PyTuple_Pack(1, re);
+    if (argtuple == NULL) {
+        PyErr_SetString(PyExc_TypeError, "Failed to pack the result, required for writing to the file");
+        goto fail;
+    }
+
+    PyObject *file_contents = PyObject_CallObject(write_method, argtuple);
+    if (file_contents == NULL) {
+        PyErr_SetString(PyExc_TypeError, "Failed to write result to the file");
+        goto fail;
+    }
+
+    Py_XDECREF(file_contents);
+    Py_XDECREF(write_method);
+    Py_XDECREF(re);
+    Py_XDECREF(argtuple);
+
+    Py_RETURN_NONE;
+
+fail:
+    Py_XDECREF(write_method);
+    Py_XDECREF(re);
+
+    return NULL;
 }
 
 static void CJSON_CDECL internal_free(printbuffer *buffer) {
