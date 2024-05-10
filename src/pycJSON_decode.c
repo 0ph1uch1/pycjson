@@ -499,7 +499,6 @@ static bool parse_value(PyObject **item, parse_buffer *const input_buffer) {
 PyObject *pycJSON_Decode(PyObject *self, PyObject *args, PyObject *kwargs) {
     parse_buffer buffer = {0, 0, 0, 0, {0, 0}, 0};
     PyObject *item = NULL;
-
     const char *value;
     Py_ssize_t buffer_length;
     static const char *kwlist[] = {"s", "object_hook", NULL};

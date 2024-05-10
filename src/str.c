@@ -48,7 +48,7 @@ bool count_skipped(const char *buf, size_t max_len, size_t *skipped, size_t *len
             i += skip_next;
             skip_next = 0;
             if (escape_result != 0) {
-                if (((~(end_result & (escape_result << 1))) & end_result) != 0) {
+                if ((end_result ^ (escape_result << 1)) != 0) {
                     // there is real ending with some escaped sequence
                     if (u_result != 0) {
                         // some unicodes
@@ -148,48 +148,17 @@ bool count_skipped(const char *buf, size_t max_len, size_t *skipped, size_t *len
             }
         } else {
             skip_next = 0;
-            unsigned int x = escape_result;
-            unsigned odd = x & 0x55555555;
-            unsigned even = x & 0xAAAAAAAA;
-            unsigned int even_take = even & (odd >> 1);
-            unsigned int odd_take = odd & (even >> 1);
-            int dup = BitCount((even_take >> 1) & odd_take);
-            // number of backslash minus escaped backslash
-            *skipped += BitCount(x) - (BitCount(even_take) + BitCount(odd_take) - dup);
-            if (x == 0xffffffff) {
-                // 32 ending backslash
-            } else if (x == 0x7fffffff) {
-                // 31 ending backslash
-                skip_next = 1;
-            } else {
-                // reverse x bits-wise
-                x = (x >> 16) | (x << 16);
-                x = ((x & 0x00FF00FF) << 8) | ((x & 0xFF00FF00) >> 8);
-                x = ((x & 0x0F0F0F0F) << 4) | ((x & 0xF0F0F0F0) >> 4);
-                x = ((x & 0x33333333) << 2) | ((x & 0xCCCCCCCC) >> 2);
-                x = ((x & 0x55555555) << 1) | ((x & 0xAAAAAAAA) >> 1);
-
-                x = ~x;
-                x = x ^ (x - 1);
-                x += 1;
-                switch (x) {
-                    // if there are odd number of ending backslash
-                    case 1 << 2:
-                    case 1 << 4:
-                    case 1 << 6:
-                    case 1 << 8:
-                    case 1 << 10:
-                    case 1 << 12:
-                    case 1 << 14:
-                    case 1 << 16:
-                    case 1 << 18:
-                    case 1 << 20:
-                    case 1 << 22:
-                    case 1 << 24:
-                    case 1 << 26:
-                    case 1 << 28:
-                    case 1 << 30:
-                        skip_next = 1;
+            int last = 0;
+            __mmask32 x = escape_result;
+            while (x) {
+                unsigned int y = x - 1;
+                if ((x >> 1) & last) {
+                    x = x & y; // skipped
+                } else {
+                    last = x ^ y;
+                    x = x & y;
+                    *skipped += 1;
+                    if (x & (1 << 31)) skip_next = 1;
                 }
             }
         }
@@ -234,6 +203,7 @@ int get_utf8_kind(const unsigned char *buf, size_t len) {
     const __m256i m256_zero = _mm256_set1_epi8((char) 0);           // 0
     const __m256i max_onebyte = _mm256_set1_epi8((char) 0x80);      // -128 or 128U
     int kind = 1;
+    bool skip_next = false;
     for (i = 0; i + 32 <= len; i += 32) {
         __m256i in = _mm256_loadu_si256((const void *) (buf + i));
         if (mm256_greater8u_mask(in, min_4bytes) != 0) {
@@ -263,40 +233,35 @@ int get_utf8_kind(const unsigned char *buf, size_t len) {
         // check unicode escape \uXXXX
 
         // unicode starting at even position
-        uint32_t result = _mm256_movemask_epi8(_mm256_cmpeq_epi8(in, unicode_mask1));
-        if ((result & (result >> 1)) != 0) {
-            for (int ii = 0; ii < 32 - 1; ii += 2) {
-                if (buf[i + ii] == '\\' && buf[i + ii + 1] == 'u' && (i + ii - 1 < 0 || buf[i + ii - 1] != '\\')) {
-                    if (CHECK_SURROGATES_UNICODE(buf + i + ii + 2)) {
-                        return 4;
+        __mmask32 result = _mm256_movemask_epi8(_mm256_cmpeq_epi8(in, unicode_mask1));
+        __mmask32 result2 = _mm256_movemask_epi8(_mm256_cmpeq_epi8(in, unicode_mask2)) & 0b01111111111111111111111111111110;
+        if (skip_next) {
+            result &= 0b11111111111111111111111111111110;
+            skip_next = false;
+        }
+        result = (result & (result >> 1)) | (result2 & (result2 >> 1));
+        if (result != 0 || buf[i + 31] == '\\') {
+            for (int ii = 0; ii < 32; ii++) {
+                if (buf[i + ii] == '\\') {
+                    ii++;
+                    if (ii == 32) {
+                        skip_next = true;
                     }
-                    // 4 digit unicode can only be 1 byte or 2 bytes < \uFFFF
-                    if (buf[i + ii + 2] != '0' || buf[i + ii + 3] != '0') {
-                        kind = 2;
+                    if (i + ii + 4 < len && buf[i + ii] == 'u') {
+                        if (CHECK_SURROGATES_UNICODE(buf + i + ii + 1)) {
+                            return 4;
+                        }
+                        if (buf[i + ii + 1] != '0' || buf[i + ii + 2] != '0') {
+                            kind = 2;
+                        }
+                        ii += 4 - 1;
                     }
-                    // skip \u XXXX
-                    ii += 4;
                 }
             }
         }
-
-        // unicode starting at odd position
-        result = _mm256_movemask_epi8(_mm256_cmpeq_epi8(in, unicode_mask2)) & 0b01111111111111111111111111111110;
-        if ((result & (result >> 1)) != 0) {
-            for (int ii = 1; ii < 32 - 2; ii += 2) {
-                if (buf[i + ii] == '\\' && buf[i + ii + 1] == 'u' && (i + ii - 1 < 0 || buf[i + ii - 1] != '\\')) {
-                    // surrogates
-                    if (CHECK_SURROGATES_UNICODE(buf + i + ii + 2)) {
-                        return 4;
-                    }
-                    if (buf[i + ii + 2] != '0' || buf[i + ii + 3] != '0') {
-                        kind = 2;
-                    }
-                    // skip \u XXXX
-                    ii += 4;
-                }
-            }
-        }
+    }
+    if (skip_next) {
+        i++;
     }
     for (; i < len; i++) {
         if (buf[i] > 239) return 4;
@@ -317,7 +282,7 @@ int get_utf8_kind(const unsigned char *buf, size_t len) {
             }
         }
         if (buf[i] == '\\') {
-            if (i + 4 + 1 < len && buf[i + 1] == 'u') {
+            if (buf[i + 1] == 'u') {
                 // skil \u
                 i += 2;
                 if (CHECK_SURROGATES_UNICODE(buf + i)) {
