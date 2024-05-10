@@ -157,7 +157,7 @@ bool count_skipped(const char *buf, size_t max_len, size_t *skipped, size_t *len
                 } else {
                     last = x ^ y;
                     x = x & y;
-                    skipped += 1;
+                    *skipped += 1;
                     if (y == 0x7fffffff) skip_next = 1;
                 }
             }
