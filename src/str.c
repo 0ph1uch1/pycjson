@@ -148,13 +148,17 @@ bool count_skipped(const char *buf, size_t max_len, size_t *skipped, size_t *len
             }
         } else {
             skip_next = 0;
-            for (int j = 0; j < 32; j++) {
-                if ((escape_result >> j) & 0b1) {
-                    *skipped += 1;
-                    j++;
-                    if (j > 31) {
-                        skip_next = 1;
-                    }
+            int last = 0;
+            uint32_t x = escape_result;
+            while (x) {
+                unsigned int y = x - 1;
+                if ((x >> 1) & last) {
+                    x = x & y; // skipped
+                } else {
+                    last = x ^ y;
+                    x = x & y;
+                    skipped += 1;
+                    if (y == 0x7fffffff) skip_next = 1;
                 }
             }
         }
