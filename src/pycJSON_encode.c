@@ -108,7 +108,7 @@ static bool print_number(PyObject *item, printbuffer *const output_buffer) {
 
     int length = 0;
     size_t i = 0;
-    unsigned char number_buffer[32] = {0}; /* temporary buffer to print the number into */
+    unsigned char number_buffer[64] = {0}; /* temporary buffer to print the number into */
     unsigned char decimal_point = get_decimal_point();
 
     if (output_buffer == NULL) {
@@ -148,7 +148,7 @@ static bool print_number(PyObject *item, printbuffer *const output_buffer) {
             if (dconv_d2s_ptr == NULL) {
                 dconv_d2s_init(&dconv_d2s_ptr, NO_FLAGS, "Infinity", "NaN", 'e', -324, 308, 0, 0);
             }
-            dconv_d2s(dconv_d2s_ptr, d, (char *) number_buffer, 32, &length);
+            dconv_d2s(dconv_d2s_ptr, d, (char *) number_buffer, sizeof(number_buffer), &length);
             // /* Check whether the original double can be recovered */
             // if ((sscanf((char *) number_buffer, "%lg", &test) != 1) || !compare_double((double) test, d)) {
             //     /* If not, print with 17 decimal places of precision */
