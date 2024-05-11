@@ -6,6 +6,53 @@ if TYPE_CHECKING:
     import unittest
 
 
+class FuzzGenerator:
+    """A random JSON serialisable object generator."""
+
+    def __init__(self, seed=None):
+        import random
+        self._randomizer = random.Random(seed)
+        self._shrink = 1
+
+    def key(self):
+        key_types = [self.int, self.float, self.string, self.null, self.bool]
+        return self._randomizer.choice(key_types)()
+
+    def item(self):
+        if self._randomizer.random() > 0.8:
+            return self.key()
+        return self._randomizer.choice([self.list, self.dict])()
+
+    def int(self):
+        return int(self.float())
+
+    def float(self):
+        import math
+        sign = self._randomizer.choice([-1, 1, 0])
+        return sign * math.exp(self._randomizer.uniform(-40, 40))
+
+    def string(self):
+        characters = ["\x00", "\t", "a", "\U0001f680", "<></>", "\u1234"]
+        return self._randomizer.choice(characters) * self.length()
+
+    def bool(self):
+        return self._randomizer.random() < 0.5
+
+    def null(self):
+        return None
+
+    def list(self):
+        return [self.item() for i in range(self.length())]
+
+    def dict(self):
+        return {self.key(): self.item() for i in range(self.length())}
+
+    def length(self):
+        import math
+        self._shrink *= 0.99
+        return int(math.exp(self._randomizer.uniform(-0.5, 5)) * self._shrink)
+
+
 def get_benchfiles_fullpath():
     benchmark_folder = os.path.join(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
