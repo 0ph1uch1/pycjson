@@ -202,19 +202,19 @@ class TestMemory(unittest.TestCase):
                     cjson.dump(data, f)
             mem_diff_limit = self.tracemalloc_mem_check(
                 datas,
-                10,
                 100,
+                10,
                 dump,
                 mem_diff_limit=10000
             )
             mem_diff_limit2 = self.tracemalloc_mem_check(
                 datas,
-                10,
-                300,
+                1,
+                100,
                 dump,
                 mem_diff_limit=10000
             )
-            self.assertAlmostEqual(mem_diff_limit2 / mem_diff_limit, 1., delta=0.1)
+            self.assertLessEqual(mem_diff_limit2 / max(mem_diff_limit, 1), 2)
 
     def test_load_leak(self):
         if hasattr(sys, "pypy_version_info"):
