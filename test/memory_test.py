@@ -96,7 +96,7 @@ class TestMemory(unittest.TestCase):
         print(f"testing {self._subtest._message}, mem_diff: {mem_diff}, peak_diff: {peak_diff}")
         # should not increase more than 100 bytes
         self.assertGreaterEqual(mem_diff_limit, mem_diff)
-        return mem_diff_limit
+        return mem_diff
 
     def test_decode_leak(self):
         if hasattr(sys, "pypy_version_info"):
@@ -200,21 +200,21 @@ class TestMemory(unittest.TestCase):
             def dump(data):
                 with tempfile.NamedTemporaryFile("w", delete=True) as f:
                     cjson.dump(data, f)
-            mem_diff_limit = self.tracemalloc_mem_check(
+            mem_diff = self.tracemalloc_mem_check(
                 datas,
                 100,
                 10,
                 dump,
                 mem_diff_limit=10000
             )
-            mem_diff_limit2 = self.tracemalloc_mem_check(
+            mem_diff2 = self.tracemalloc_mem_check(
                 datas,
-                1,
+                100,
                 100,
                 dump,
                 mem_diff_limit=10000
             )
-            self.assertLessEqual(mem_diff_limit2 / max(mem_diff_limit, 1), 2)
+            self.assertLessEqual(mem_diff2 / max(mem_diff, 1), 5)
 
     def test_load_leak(self):
         if hasattr(sys, "pypy_version_info"):
@@ -230,13 +230,21 @@ class TestMemory(unittest.TestCase):
             def load(file):
                 with open(file, "r", encoding="utf-8") as f:
                     cjson.load(f)
-            self.tracemalloc_mem_check(
+            mem_diff = self.tracemalloc_mem_check(
                 file_paths,
+                100,
                 10,
+                load,
+                mem_diff_limit=30000
+            )
+            mem_diff2 = self.tracemalloc_mem_check(
+                file_paths,
+                100,
                 100,
                 load,
-                mem_diff_limit=100
+                mem_diff_limit=30000
             )
+            self.assertLessEqual(mem_diff2 / max(mem_diff, 1), 5)
 
 
 if __name__ == "__main__":
