@@ -4,26 +4,6 @@ import unittest
 
 
 class TestMemory(unittest.TestCase):
-    @staticmethod
-    def collect_all_objects(obj):
-        """Given an object, return a list of all objects referenced by it."""
-        def _inner(o):
-            yield o
-            if isinstance(o, list):
-                for v in o:
-                    yield from _inner(v)
-            elif isinstance(o, dict):
-                for k, v in o.items():
-                    yield from _inner(k)
-                    yield from _inner(v)
-
-        out = []
-        seen = set()
-        for o in _inner(obj):
-            if id(o) not in seen and o is not None:
-                seen.add(id(o))
-                out.append(o)
-        return out
 
     @staticmethod
     def random_object(seed=None):
@@ -46,6 +26,8 @@ class TestMemory(unittest.TestCase):
         import gc
         import time
 
+        from test_utils import FuzzGenerator
+
         import cjson
 
         now = time.time()
@@ -53,7 +35,7 @@ class TestMemory(unittest.TestCase):
         for seed in seeds:
             data = self.random_object(seed)
 
-            data_objects = self.collect_all_objects(data)
+            data_objects = FuzzGenerator.collect_all_objects(data)
             # Exclude ints because they get referenced by the lists below.
             data_objects = [o for o in data_objects if not isinstance(o, int)]
             gc.collect()
@@ -69,34 +51,9 @@ class TestMemory(unittest.TestCase):
                         print(f"Ref count of {o!r} went from {before} to {after}")
                 self.assertTrue(False, "Ref count changed")
 
-    def gc_repeat_task(self, datas, run_times, test_func):
-        for data in datas:
-            for _ in range(run_times):
-                test_func(data)
-
     def tracemalloc_mem_check(self, datas, warm_up_repeat, test_repeat, test_func, mem_diff_limit):
-        import gc
-        import tracemalloc
-
-        # warm up. CPython will not release memory immediately.
-        self.gc_repeat_task(datas, warm_up_repeat, test_func)
-        #
-        tracemalloc.start()
-        #
-        gc.collect()
-        snapshot_1, peak_1 = tracemalloc.get_traced_memory()
-        self.gc_repeat_task(datas, test_repeat, test_func)
-        gc.collect()
-        snapshot_2, peak_2 = tracemalloc.get_traced_memory()
-        #
-        tracemalloc.stop()
-        #
-        mem_diff = snapshot_2 - snapshot_1
-        peak_diff = peak_2 - peak_1
-        print(f"testing {self._subtest._message}, mem_diff: {mem_diff}, peak_diff: {peak_diff}")
-        # should not increase more than 100 bytes
-        self.assertGreaterEqual(mem_diff_limit, mem_diff)
-        return mem_diff
+        from test_utils import tracemalloc_mem_check
+        return tracemalloc_mem_check(self, datas, warm_up_repeat, test_repeat, test_func, mem_diff_limit)
 
     def test_decode_leak(self):
         if hasattr(sys, "pypy_version_info"):
@@ -154,6 +111,8 @@ class TestMemory(unittest.TestCase):
         import tempfile
         import time
 
+        from test_utils import FuzzGenerator
+
         import cjson
 
         now = time.time()
@@ -163,7 +122,7 @@ class TestMemory(unittest.TestCase):
                 data = self.random_object(seed)
                 # print(f"--seed {seed}")
 
-                data_objects = self.collect_all_objects(data)
+                data_objects = FuzzGenerator.collect_all_objects(data)
                 # Exclude ints because they get referenced by the lists below.
                 data_objects = [o for o in data_objects if not isinstance(o, int)]
                 gc.collect()

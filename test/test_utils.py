@@ -52,6 +52,27 @@ class FuzzGenerator:
         self._shrink *= 0.99
         return int(math.exp(self._randomizer.uniform(-0.5, 5)) * self._shrink)
 
+    @staticmethod
+    def collect_all_objects(obj):
+        """Given an object, return a list of all objects referenced by it."""
+        def _inner(o):
+            yield o
+            if isinstance(o, list):
+                for v in o:
+                    yield from _inner(v)
+            elif isinstance(o, dict):
+                for k, v in o.items():
+                    yield from _inner(k)
+                    yield from _inner(v)
+
+        out = []
+        seen = set()
+        for o in _inner(obj):
+            if id(o) not in seen and o is not None:
+                seen.add(id(o))
+                out.append(o)
+        return out
+
 
 def get_benchfiles_fullpath():
     benchmark_folder = os.path.join(
@@ -101,3 +122,38 @@ def check_obj_same(self: "unittest.TestCase", a, b):
         _num_check(self, a, b)
         return
     self.assertEqual(a, b, "mismatch")
+
+
+def gc_repeat_task(datas, run_times, test_func):
+    if datas is not None:
+        for data in datas:
+            for _ in range(run_times):
+                test_func(data)
+    else:
+        for _ in range(run_times):
+            test_func()
+
+
+def tracemalloc_mem_check(self: "unittest.TestCase", datas, warm_up_repeat, test_repeat, test_func, mem_diff_limit):
+    import gc
+    import tracemalloc
+
+    # warm up. CPython will not release memory immediately.
+    gc_repeat_task(datas, warm_up_repeat, test_func)
+    #
+    tracemalloc.start()
+    #
+    gc.collect()
+    snapshot_1, peak_1 = tracemalloc.get_traced_memory()
+    gc_repeat_task(datas, test_repeat, test_func)
+    gc.collect()
+    snapshot_2, peak_2 = tracemalloc.get_traced_memory()
+    #
+    tracemalloc.stop()
+    #
+    mem_diff = snapshot_2 - snapshot_1
+    peak_diff = peak_2 - peak_1
+    print(f"testing {self._subtest._message}, mem_diff: {mem_diff}, peak_diff: {peak_diff}")
+    # should not increase more than 100 bytes
+    self.assertGreaterEqual(mem_diff_limit, mem_diff)
+    return mem_diff
