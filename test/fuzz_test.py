@@ -15,25 +15,25 @@ class TestFuzz(unittest.TestCase):
 
     def test_fuzz(self):
         from test_utils import tracemalloc_mem_check
-        # with self.subTest("fuzz loads"):
-        #     tracemalloc_mem_check(
-        #         self,
-        #         datas=None,
-        #         warm_up_repeat=100,
-        #         test_repeat=1000,
-        #         test_func=self._fuzz_loads,
-        #         mem_diff_limit=100
-        #     )
+        with self.subTest("fuzz loads"):
+            tracemalloc_mem_check(
+                self,
+                datas=None,
+                warm_up_repeat=100,
+                test_repeat=1000,
+                test_func=self._fuzz_loads,
+                mem_diff_limit=100
+            )
 
-        # with self.subTest("fuzz dumps"):
-        #     tracemalloc_mem_check(
-        #         self,
-        #         datas=None,
-        #         warm_up_repeat=100,
-        #         test_repeat=1000,
-        #         test_func=self._fuzz_dumps,
-        #         mem_diff_limit=100
-        #     )
+        with self.subTest("fuzz dumps"):
+            tracemalloc_mem_check(
+                self,
+                datas=None,
+                warm_up_repeat=100,
+                test_repeat=1000,
+                test_func=self._fuzz_dumps,
+                mem_diff_limit=100
+            )
 
         with self.subTest("fuzz order"):
             tracemalloc_mem_check(
