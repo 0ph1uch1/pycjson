@@ -686,7 +686,7 @@ PyObject *pycJSON_Decode(PyObject *self, PyObject *args, PyObject *kwargs) {
     parse_buffer buffer = {0, 0, 0, 0, {0, 0}, 0};
     PyObject *item = NULL;
 
-    const char *value;
+    const char *value = NULL;
     Py_ssize_t buffer_length;
     static const char *kwlist[] = {"s", "object_hook", NULL};
     if (!PyArg_ParseTupleAndKeywords(args, kwargs, "s#|O", (char **) kwlist, &value, &buffer_length, &buffer.object_hook)) {
@@ -721,6 +721,7 @@ PyObject *pycJSON_Decode(PyObject *self, PyObject *args, PyObject *kwargs) {
     return item;
 
 fail:
+    Py_XDECREF(item);
     if (value != NULL && !PyErr_Occurred()) {
         Py_ssize_t position = 0;
 
