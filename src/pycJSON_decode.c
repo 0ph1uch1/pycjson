@@ -546,5 +546,99 @@ fail:
 }
 
 PyObject *pycJSON_DecodeFile(PyObject *self, PyObject *args, PyObject *kwargs) {
-    Py_RETURN_NOTIMPLEMENTED;
+    parse_buffer buffer = {0, 0, 0, 0, {0, 0}, 0};
+    PyObject *item = NULL;
+    PyObject *file_obj = NULL;
+    PyObject *read_method = NULL;
+    PyObject *file_contents = NULL;
+    const char *value = NULL;
+    Py_ssize_t buffer_length;
+    static const char *kwlist[] = {"fp", "object_hook", NULL};
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O|O", (char **) kwlist, &file_obj, &buffer.object_hook)) {
+        PyErr_Format(PyExc_TypeError, "Failed to parse JSON: invalid argument, expected str / bytes-like object");
+        goto fail;
+    }
+
+    if (!PyObject_HasAttrString(file_obj, "read")) {
+        PyErr_SetString(PyExc_TypeError, "object must have a 'read' method");
+        goto fail;
+    }
+
+    read_method = PyObject_GetAttrString(file_obj, "read");
+    if (!PyCallable_Check(read_method)) {
+        PyErr_SetString(PyExc_TypeError, "'read' method is not callable");
+        goto fail;
+    }
+
+    file_contents = PyObject_CallObject(read_method, NULL);
+    if (file_contents == NULL) {
+        PyErr_SetString(PyExc_ValueError, "Failed to read file contents");
+        goto fail;
+    }
+
+    // set value and buffer_length
+    if (PyUnicode_Check(file_contents)) {
+        value = PyUnicode_AsUTF8(file_contents);
+        if (value == NULL) {
+            PyErr_SetString(PyExc_ValueError, "Failed to parse JSON: value is NULL");
+            goto fail;
+        }
+        buffer_length = strlen(value);
+    } else if (PyBytes_Check(file_contents)) {
+        value = PyBytes_AsString(file_contents);
+        if (value == NULL) {
+            PyErr_SetString(PyExc_ValueError, "Failed to parse JSON: value is NULL");
+            goto fail;
+        }
+        buffer_length = PyBytes_Size(file_contents);
+    } else {
+        PyErr_SetString(PyExc_ValueError, "file content must be a string");
+        goto fail;
+    }
+
+    if (buffer.object_hook && !PyCallable_Check(buffer.object_hook)) {
+        PyErr_Format(PyExc_TypeError, "Failed to parse JSON: object_hook is not callable");
+        goto fail;
+    }
+
+    if (0 == buffer_length) {
+        PyErr_SetString(PyExc_ValueError, "Empty string");
+        goto fail;
+    }
+    buffer.content = (const unsigned char *) value;
+    buffer.length = buffer_length;
+    buffer.offset = 0;
+    buffer.hooks = global_hooks;
+    if (!parse_value(&item, buffer_skip_whitespace(skip_utf8_bom(&buffer)))) {
+        /* parse failure. ep is set. */
+        goto fail;
+    }
+    if (buffer.offset < buffer.length) {
+        PyErr_Format(PyExc_ValueError, "Failed to parse JSON: extra characters at the end\nend position: %d", buffer.offset);
+        goto fail;
+    }
+
+    Py_XDECREF(file_contents);
+    Py_XDECREF(read_method);
+
+    return item;
+
+fail:
+    if (value != NULL && !PyErr_Occurred()) {
+        Py_ssize_t position = 0;
+
+        if (buffer.offset < buffer.length) {
+            position = buffer.offset;
+        } else if (buffer.length > 0) {
+            position = buffer.length - 1;
+        }
+
+        PyErr_Format(PyExc_ValueError, "Failed to parse JSON (position %d)", position);
+    }
+
+    Py_XDECREF(file_contents);
+    Py_XDECREF(read_method);
+    Py_XDECREF(item);
+
+    return NULL;
 }
