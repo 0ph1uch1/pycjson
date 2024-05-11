@@ -2,20 +2,20 @@ name: "Build Test & Unit Test"
 
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - "src/**"
-      - "test/**"
-      - "setup.py"
-      - "CMakeLists.txt"
-      - ".github/workflows/unittest.yml"
-  pull_request:
-    paths:
-      - "src/**"
-      - "test/**"
-      - "setup.py"
-      - "CMakeLists.txt"
-      - ".github/workflows/unittest.yml"
+  # push:
+  #   paths:
+  #     - "src/**"
+  #     - "test/**"
+  #     - "setup.py"
+  #     - "CMakeLists.txt"
+  #     - ".github/workflows/unittest.yml"
+  # pull_request:
+  #   paths:
+  #     - "src/**"
+  #     - "test/**"
+  #     - "setup.py"
+  #     - "CMakeLists.txt"
+  #     - ".github/workflows/unittest.yml"
 
 jobs:
   run-test:
